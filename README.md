@@ -1,8 +1,26 @@
-# ⊛ Ferroleaf
+
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/rahulbhadani/ferroleaf/main/assets/icons/ferroleaf.svg" alt="Ferroleaf Logo" width="120" height="120" />
+</p>
+<h1 align="center">Ferroleaf</h1>
+<p align="center">
+  <em>A Latex Editor + Viewer in Rust</em>
+</p>
+<!--p align="center">
+  <a href="https://github.com/rahulbhadani/ferroleaf/actions">
+    <img src="https://img.shields.io/github/actions/workflow/status/rahulbhadani/ferroleaf/ci.yml?style=flat-square" alt="Build Status" />
+  </a>
+  <a href="https://crates.io/crates/ferroleaf">
+    <img src="https://img.shields.io/crates/v/ferroleaf?style=flat-square" alt="Crates.io" />
+  </a>
+  <a href="https://github.com/rahulbhadani/ferroleaf/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/rahulbhadani/ferroleaf?style=flat-square" alt="License" />
+  </a>
+</p-->
 
 A native Linux LaTeX editor built with **Rust + Iced**, featuring a warm **pink-brown dark theme**, real-time PDF preview, and full **SyncTeX** support -- clicking any text in the PDF jumps your cursor directly to the corresponding LaTeX source.
 
-No Electron. No browser. No subscription. All features, always.
 
 ---
 
