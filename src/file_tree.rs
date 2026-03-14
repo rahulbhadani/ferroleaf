@@ -1,6 +1,6 @@
 use iced::{
     widget::{button, column, container, row, scrollable, text, Space},
-    Alignment, Element, Length,
+    Alignment, Color, Element, Length,
 };
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -66,10 +66,11 @@ impl FileTree {
             let is_main = main_file == Some(&entry.path);
             let is_active = !entry.is_dir && active_file == Some(&entry.path);
 
-            let icon: &str = if entry.is_dir {
-                if self.expanded_dirs.contains(&entry.path) { "▾" } else { "▸" }
+            let (icon, icon_color): (&str, Color) = if entry.is_dir {
+                let ch = if self.expanded_dirs.contains(&entry.path) { "▾" } else { "▸" };
+                (ch, Palette::WARNING)
             } else {
-                file_icon(&entry.name)
+                file_icon_colored(&entry.name)
             };
 
             let name_color = if is_main {
@@ -92,7 +93,7 @@ impl FileTree {
             let label_btn = button(
                 row![
                     Space::with_width(indent),
-                    text(icon).size(11u16).color(Palette::TEXT_DIM),
+                    text(icon).size(13u16).color(icon_color),
                     Space::with_width(4u16),
                     text(entry.name.clone()).size(13u16).color(name_color),
                 ].align_y(Alignment::Center)
@@ -131,15 +132,23 @@ impl FileTree {
     }
 }
 
-fn file_icon(name: &str) -> &'static str {
+fn file_icon_colored(name: &str) -> (&'static str, Color) {
+    // Each file type gets a distinct (glyph, color) pair for instant recognition.
+    const TEX_PINK:   Color = Color { r: 0.95, g: 0.55, b: 0.65, a: 1.0 }; // pink
+    const BIB_TEAL:   Color = Color { r: 0.35, g: 0.85, b: 0.78, a: 1.0 }; // teal
+    const STY_VIOLET: Color = Color { r: 0.72, g: 0.52, b: 0.96, a: 1.0 }; // violet
+    const PDF_RED:    Color = Color { r: 0.95, g: 0.38, b: 0.38, a: 1.0 }; // red
+    const IMG_GREEN:  Color = Color { r: 0.50, g: 0.90, b: 0.42, a: 1.0 }; // lime
+    const TXT_SAND:   Color = Color { r: 0.80, g: 0.72, b: 0.55, a: 1.0 }; // sand
+    const DIM:        Color = Color { r: 0.50, g: 0.40, b: 0.38, a: 1.0 }; // dim
     let ext = name.rsplit('.').next().unwrap_or("").to_lowercase();
     match ext.as_str() {
-        "tex"                                  => "⊤",
-        "bib"                                  => "⊛",
-        "cls" | "sty"                          => "⊞",
-        "pdf"                                  => "⊡",
-        "png" | "jpg" | "jpeg" | "svg" | "eps" => "⊠",
-        "txt" | "md"                           => "≡",
-        _                                      => "·",
+        "tex"                                  => ("T", TEX_PINK),
+        "bib"                                  => ("B",   BIB_TEAL),
+        "cls" | "sty"                          => ("S",   STY_VIOLET),
+        "pdf"                                  => ("P",   PDF_RED),
+        "png" | "jpg" | "jpeg" | "svg" | "eps" => ("I",   IMG_GREEN),
+        "txt" | "md"                           => ("D",   TXT_SAND),
+        _                                      => ("·", DIM),
     }
 }

@@ -99,7 +99,7 @@ impl PdfViewer {
             pb("−", Message::PdfZoomOut),
             zoom_label,
             pb("+", Message::PdfZoomIn),
-            pb("⊡", Message::PdfZoomFit),
+            pb("[.]", Message::PdfZoomFit),
             Space::with_width(Length::Fill),
             pb("↻  Recompile", Message::Compile),
         ].spacing(4).align_y(Alignment::Center).padding([4u16, 8u16]))

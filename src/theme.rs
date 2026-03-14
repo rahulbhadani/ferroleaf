@@ -6,7 +6,7 @@ use iced::{
     Border, Color, Shadow, Theme, Background,
 };
 
-// ── Palette ───────────────────────────────────────────────────────────────────
+//  Palette 
 
 pub struct Palette;
 
@@ -44,7 +44,7 @@ impl Palette {
     pub const SYN_KEYWORD:   Color = Color { r: 0.85, g: 0.55, b: 0.90, a: 1.0 };
 }
 
-// ── Container styles (closures) ───────────────────────────────────────────────
+//  Container styles (closures) 
 
 fn container_bg(bg: Color) -> container::Style {
     container::Style {
@@ -115,7 +115,7 @@ pub fn bg_mid(_t: &Theme) -> container::Style {
     container_bg(Palette::BG_MID)
 }
 
-// ── Button styles ─────────────────────────────────────────────────────────────
+//  Button styles 
 
 pub fn primary_button(_t: &Theme, status: button::Status) -> button::Style {
     match status {
@@ -232,7 +232,7 @@ pub fn tab_button(active: bool) -> impl Fn(&Theme, button::Status) -> button::St
     }
 }
 
-// ── Text input ────────────────────────────────────────────────────────────────
+//  Text input 
 
 pub fn search_input(_t: &Theme, status: text_input::Status) -> text_input::Style {
     let (border_color, border_width) = match status {
@@ -250,7 +250,7 @@ pub fn search_input(_t: &Theme, status: text_input::Status) -> text_input::Style
     }
 }
 
-// ── Text editor ───────────────────────────────────────────────────────────────
+//  Text editor 
 
 pub fn code_editor(_t: &Theme, _status: text_editor::Status) -> text_editor::Style {
     text_editor::Style {
@@ -263,7 +263,7 @@ pub fn code_editor(_t: &Theme, _status: text_editor::Status) -> text_editor::Sty
     }
 }
 
-// ── Scrollable ────────────────────────────────────────────────────────────────
+//  Scrollable 
 
 pub fn dark_scroll(_t: &Theme, status: scrollable::Status) -> scrollable::Style {
     let scroller_color = match status {
@@ -292,7 +292,7 @@ pub fn dark_scroll(_t: &Theme, status: scrollable::Status) -> scrollable::Style 
     }
 }
 
-// ── Rule ─────────────────────────────────────────────────────────────────────
+//  Rule 
 
 pub fn subtle_rule(_t: &Theme) -> rule::Style {
     rule::Style {
@@ -303,7 +303,86 @@ pub fn subtle_rule(_t: &Theme) -> rule::Style {
     }
 }
 
-// ── Token colors for syntax highlighting ─────────────────────────────────────
+
+//  Menu bar 
+
+pub fn menu_bar_bg(_t: &Theme) -> container::Style {
+    container::Style {
+        background: Some(Background::Color(Color {
+            r: 0.16, g: 0.10, b: 0.10, a: 1.0,
+        })),
+        border: Border { color: Palette::BROWN_DIM, width: 0.0, radius: 0.0.into() },
+        ..Default::default()
+    }
+}
+
+pub fn menu_bar_item(_t: &Theme, status: button::Status) -> button::Style {
+    match status {
+        button::Status::Active | button::Status::Disabled => button::Style {
+            background: None,
+            border: Border { radius: 3.0.into(), ..Default::default() },
+            text_color: Palette::TEXT_SECONDARY,
+            shadow: Shadow::default(),
+        },
+        button::Status::Hovered | button::Status::Pressed => button::Style {
+            background: Some(Background::Color(Palette::BG_LIGHT)),
+            border: Border { radius: 3.0.into(), ..Default::default() },
+            text_color: Palette::TEXT_PRIMARY,
+            shadow: Shadow::default(),
+        },
+    }
+}
+
+pub fn menu_bar_active(_t: &Theme, _status: button::Status) -> button::Style {
+    button::Style {
+        background: Some(Background::Color(Palette::PINK_DIM)),
+        border: Border { radius: 3.0.into(), ..Default::default() },
+        text_color: Palette::PINK_BRIGHT,
+        shadow: Shadow::default(),
+    }
+}
+
+//  Dropdown / context-menu 
+
+pub fn menu_dropdown_bg(_t: &Theme) -> container::Style {
+    container::Style {
+        background: Some(Background::Color(Color {
+            r: 0.20, g: 0.13, b: 0.13, a: 1.0,
+        })),
+        border: Border { color: Palette::BROWN_MID, width: 1.0, radius: 5.0.into() },
+        shadow: Shadow {
+            color: Color { r: 0.0, g: 0.0, b: 0.0, a: 0.45 },
+            offset: iced::Vector::new(0.0, 4.0),
+            blur_radius: 16.0,
+        },
+        text_color: None,
+    }
+}
+
+pub fn menu_item(_t: &Theme, status: button::Status) -> button::Style {
+    match status {
+        button::Status::Active | button::Status::Disabled => button::Style {
+            background: None,
+            border: Border { radius: 3.0.into(), ..Default::default() },
+            text_color: Palette::TEXT_SECONDARY,
+            shadow: Shadow::default(),
+        },
+        button::Status::Hovered => button::Style {
+            background: Some(Background::Color(Palette::PINK_DIM)),
+            border: Border { radius: 3.0.into(), ..Default::default() },
+            text_color: Palette::TEXT_PRIMARY,
+            shadow: Shadow::default(),
+        },
+        button::Status::Pressed => button::Style {
+            background: Some(Background::Color(Palette::BG_LIGHT)),
+            border: Border { radius: 3.0.into(), ..Default::default() },
+            text_color: Palette::TEXT_PRIMARY,
+            shadow: Shadow::default(),
+        },
+    }
+}
+
+//  Token colors for syntax highlighting 
 
 pub fn token_color(kind: &crate::editor::TokenKind) -> Color {
     use crate::editor::TokenKind;

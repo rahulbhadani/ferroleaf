@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use crate::app::Message;
 use crate::theme::Palette;
 
-// ── Syntax token kinds ────────────────────────────────────────────────────────
+//  Syntax token kinds 
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
@@ -57,7 +57,7 @@ pub fn tokenize_latex(src: &str) -> Vec<(usize, usize, TokenKind)> {
     tokens
 }
 
-// ── Editor state ──────────────────────────────────────────────────────────────
+//  Editor state 
 
 pub struct EditorState {
     pub content: text_editor::Content,
@@ -93,7 +93,7 @@ impl EditorState {
     }
 }
 
-// ── Tab bar ───────────────────────────────────────────────────────────────────
+//  Tab bar 
 
 pub fn tab_bar<'a>(
     open_files: &'a [PathBuf],
@@ -145,7 +145,7 @@ pub fn tab_bar<'a>(
         .into()
 }
 
-// ── Line number gutter ────────────────────────────────────────────────────────
+//  Line number gutter 
 
 pub fn line_gutter(line_count: usize, _scroll_offset: f32, _viewport_height: f32) -> Element<'static, Message> {
     let numbers: Vec<Element<Message>> = (1..=(line_count.max(1)))

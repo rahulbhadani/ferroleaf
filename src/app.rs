@@ -2,11 +2,12 @@
 //! Iced 0.13 functional API — Task replaces Command, no Application trait.
 
 use iced::{
-    keyboard, widget::{
+    keyboard, mouse,
+    widget::{
         button, column, container, horizontal_rule, row, scrollable,
         stack, text, text_editor, text_input, Space,
     },
-    Alignment, Element, Event, Font, Length, Subscription, Task, Theme,
+    Alignment, Color, Element, Event, Font, Length, Subscription, Task, Theme,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -19,6 +20,23 @@ use crate::pdf_viewer::PdfViewer;
 use crate::project::{Project, ProjectSettings};
 use crate::synctex;
 use crate::theme::Palette;
+
+// ── Menu & context-menu types ─────────────────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum MenuKind { File, Edit, Build, View, Help }
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ContextMenuKind { Editor, PdfViewer }
+
+#[derive(Debug, Clone)]
+pub struct ContextMenuState {
+    pub kind:   ContextMenuKind,
+    pub x:      f32,
+    pub y:      f32,
+    pub page_w: f32,  // captured rendered-page width (PDF context only)
+    pub page_h: f32,
+}
 
 // ── Messages ──────────────────────────────────────────────────────────────────
 
@@ -44,6 +62,19 @@ pub enum Message {
     GoToLine(u32),
     ToggleSidebar, ToggleLogPanel, ShowSettings, CloseSettings,
     KeyPressed(keyboard::Key, keyboard::Modifiers),
+    // ── Menu bar & context menu ───────────────────────────────────────────────
+    ToggleMenu(MenuKind),
+    Dismiss,
+    RightClicked,
+    SynctexAt { page: usize, x: f32, y: f32, page_w: f32, page_h: f32 },
+    // ── Editor actions ────────────────────────────────────────────────────────
+    CommentLine,
+    SelectAll,
+    CloseActiveTab,
+    // ── App control ───────────────────────────────────────────────────────────
+    Quit,
+    About,
+    ShowKeyboardShortcuts,
     Noop, Error(String),
 }
 
@@ -78,6 +109,13 @@ pub struct Ferroleaf {
     available_compilers: Vec<CompilerKind>,
     /// Last known cursor position in window coordinates (updated via subscription).
     mouse_pos: (f32, f32),
+    /// Currently open menu-bar dropdown (None = all closed).
+    open_menu: Option<MenuKind>,
+    /// Active right-click context menu.
+    context_menu: Option<ContextMenuState>,
+    /// Approximate window dimensions — used for context-menu clamping.
+    window_width: f32,
+    window_height: f32,
 }
 
 impl Ferroleaf {
@@ -97,6 +135,8 @@ impl Ferroleaf {
             search_query: String::new(), modal: Modal::WelcomeScreen,
             status_message: warn, latex_available, available_compilers,
             mouse_pos: (0.0, 0.0),
+            open_menu: None, context_menu: None,
+            window_width: 1440.0, window_height: 900.0,
         }, Task::none())
     }
 
@@ -408,6 +448,117 @@ impl Ferroleaf {
                     }
                 }
             }
+            // ── Menu bar ─────────────────────────────────────────────────────
+            Message::ToggleMenu(kind) => {
+                if self.open_menu.as_ref() == Some(&kind) {
+                    self.open_menu = None;
+                } else {
+                    self.open_menu = Some(kind);
+                    self.context_menu = None;
+                }
+            }
+            Message::Dismiss => {
+                self.open_menu = None;
+                self.context_menu = None;
+            }
+
+            // ── Right-click context menu ──────────────────────────────────────
+            Message::RightClicked => {
+                let (mx, my) = self.mouse_pos;
+                // Determine which pane was clicked based on layout geometry.
+                let sidebar_w = if self.sidebar_visible { 220.0_f32 } else { 0.0 };
+                let editor_end = sidebar_w
+                    + (self.window_width - sidebar_w) * self.split_ratio;
+                let kind = if mx > editor_end && self.pdf_viewer.pdf_path.is_some() {
+                    // Also grab rendered page dims for synctex.
+                    ContextMenuKind::PdfViewer
+                } else {
+                    ContextMenuKind::Editor
+                };
+                let (pw, ph) = self.pdf_viewer.rendered_pages
+                    .get(self.pdf_viewer.current_page)
+                    .map(|p| (p.width as f32, p.height as f32))
+                    .unwrap_or((595.0, 842.0));
+                self.context_menu = Some(ContextMenuState {
+                    kind, x: mx, y: my, page_w: pw, page_h: ph,
+                });
+                self.open_menu = None;
+            }
+
+            // ── SyncTeX triggered from context menu (uses saved click coords) ─
+            Message::SynctexAt { page, x, y, page_w, page_h } => {
+                if let Some(project) = &self.project {
+                    if let Some(target) = project.compile_target() {
+                        let pdf = target.with_extension("pdf");
+                        if pdf.exists() {
+                            return Task::perform(async move {
+                                tokio::task::spawn_blocking(move || {
+                                    synctex::pdf_to_source(
+                                        &pdf, page as u32 + 1, x, y, page_w, page_h,
+                                    )
+                                }).await.ok().flatten()
+                            }, Message::SynctexResult);
+                        }
+                    }
+                }
+            }
+
+            // ── Editor helpers ────────────────────────────────────────────────
+            Message::CommentLine => {
+                let active_path = self.project.as_ref()
+                    .and_then(|p| p.active_file.clone());
+                if let Some(active) = active_path {
+                    if let Some(state) = self.editor_states.get_mut(&active) {
+                        let (line_idx, _) = state.cursor_position();
+                        let src = state.text();
+                        if let Some(line_content) = src.lines().nth(line_idx) {
+                            state.content.perform(
+                                text_editor::Action::Move(text_editor::Motion::Home)
+                            );
+                            if line_content.starts_with('%') {
+                                state.content.perform(
+                                    text_editor::Action::Edit(text_editor::Edit::Delete)
+                                );
+                            } else {
+                                state.content.perform(
+                                    text_editor::Action::Edit(text_editor::Edit::Insert('%'))
+                                );
+                            }
+                            let new_text = state.text();
+                            if let Some(p) = &mut self.project {
+                                p.update_content(&active, new_text);
+                            }
+                        }
+                    }
+                }
+            }
+            Message::SelectAll => {
+                if let Some(project) = &self.project {
+                    if let Some(active) = project.active_file.clone() {
+                        if let Some(state) = self.editor_states.get_mut(&active) {
+                            state.content.perform(text_editor::Action::SelectAll);
+                        }
+                    }
+                }
+            }
+            Message::CloseActiveTab => {
+                if let Some(project) = &self.project {
+                    if let Some(active) = project.active_file.clone() {
+                        return self.update(Message::CloseTab(active));
+                    }
+                }
+            }
+
+            // ── App control ───────────────────────────────────────────────────
+            Message::Quit => { std::process::exit(0); }
+            Message::About => {
+                self.set_status(
+                    "Ferroleaf — Native LaTeX editor for Linux  (iced 0.13 · SyncTeX)".into(),
+                    StatusKind::Info,
+                );
+            }
+            Message::ShowKeyboardShortcuts => { self.modal = Modal::WelcomeScreen; }
+
             Message::Noop => {}
             Message::Error(e) => self.set_status(e, StatusKind::Error),
         }
@@ -417,18 +568,36 @@ impl Ferroleaf {
     // ── View ──────────────────────────────────────────────────────────────────
     pub fn view(&self) -> Element<Message> {
         let root: Element<Message> = container(
-            column![self.view_toolbar(), self.view_main(), self.view_status()]
-                .spacing(0).width(Length::Fill).height(Length::Fill)
+            column![
+                self.view_toolbar(),
+                self.view_menu_bar(),
+                self.view_main(),
+                self.view_status(),
+            ].spacing(0).width(Length::Fill).height(Length::Fill)
         )
         .width(Length::Fill).height(Length::Fill)
         .style(crate::theme::sidebar)
         .into();
 
+        // Layer dropdown / context-menu overlays on top via stack!
+        let mut layers = stack![root];
+        if self.open_menu.is_some() || self.context_menu.is_some() {
+            // Transparent full-window click-catcher — sits below the menu.
+            layers = layers.push(dismiss_catcher());
+        }
+        if let Some(menu) = &self.open_menu {
+            layers = layers.push(self.view_menu_dropdown(menu));
+        }
+        if let Some(ctx) = &self.context_menu {
+            layers = layers.push(self.view_context_menu_overlay(ctx));
+        }
+        let layered: Element<Message> = layers.into();
+
         match &self.modal {
-            Modal::None             => root,
-            Modal::WelcomeScreen    => overlay_welcome(root),
-            Modal::NewFile { name } => overlay_new_file(root, name),
-            Modal::Settings         => self.overlay_settings(root),
+            Modal::None             => layered,
+            Modal::WelcomeScreen    => overlay_welcome(layered),
+            Modal::NewFile { name } => overlay_new_file(layered, name),
+            Modal::Settings         => self.overlay_settings(layered),
         }
     }
 
@@ -436,8 +605,10 @@ impl Ferroleaf {
         iced::event::listen_with(|ev, _status, _id| match ev {
             Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) =>
                 Some(Message::KeyPressed(key, modifiers)),
-            Event::Mouse(iced::mouse::Event::CursorMoved { position }) =>
+            Event::Mouse(mouse::Event::CursorMoved { position }) =>
                 Some(Message::MouseMoved(position.x, position.y)),
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) =>
+                Some(Message::RightClicked),
             _ => None,
         })
     }
@@ -447,15 +618,21 @@ impl Ferroleaf {
     // ── View helpers ──────────────────────────────────────────────────────────
 
     fn view_toolbar(&self) -> Element<Message> {
-        let cbl = if self.compile_status.is_running() { "⟳  Compiling…" } else { "▶  Compile" };
+        let cbl = if self.compile_status.is_running() { "→  Compiling…" } else { "▶  Compile" };
+        // Icon colors — each toolbar action gets its own distinct hue.
+        const TEAL:   Color = Color { r: 0.35, g: 0.85, b: 0.78, a: 1.0 };
+        const LIME:   Color = Color { r: 0.50, g: 0.90, b: 0.42, a: 1.0 };
+        const VIOLET: Color = Color { r: 0.72, g: 0.52, b: 0.96, a: 1.0 };
+        const ORANGE: Color = Color { r: 0.96, g: 0.60, b: 0.22, a: 1.0 };
         container(row![
-            container(text("⊛ Ferroleaf").size(15).color(Palette::PINK_BRIGHT)).padding([0u16, 12u16]),
-            ib("≡", Message::ToggleSidebar),
-            ib("⌂", Message::OpenProject),
-            ib("⊕", Message::NewFile),
-            ib("⚙", Message::ShowSettings),
+            container(text("# Ferroleaf").size(15).color(Palette::PINK_BRIGHT))
+                .padding([0u16, 12u16]),
+            cib("≡", Message::ToggleSidebar,  Palette::WARNING),
+            cib("Dir", Message::OpenProject,   TEAL),
+            cib("+", Message::NewFile,        LIME),
+            cib("Cfg", Message::ShowSettings,  VIOLET),
             Space::with_width(Length::Fill),
-            ib("📋", Message::ToggleLogPanel),
+            cib("Log", Message::ToggleLogPanel, ORANGE),
             button(text(cbl).size(13))
                 .on_press(Message::Compile)
                 .style(crate::theme::primary_button)
@@ -502,7 +679,7 @@ impl Ferroleaf {
             row![
                 text("Files").size(12).color(Palette::TEXT_DIM),
                 Space::with_width(Length::Fill),
-                ib("⊕", Message::NewFile),
+                ib("+", Message::NewFile),
             ].align_y(Alignment::Center).padding([6u16, 8u16]),
             container(
                 text_input("Search…", &self.search_query)
@@ -553,13 +730,188 @@ impl Ferroleaf {
 
     fn view_pdf(&self) -> Element<Message> { self.pdf_viewer.view() }
 
+    // ── Menu bar ──────────────────────────────────────────────────────────────
+
+    fn view_menu_bar(&self) -> Element<Message> {
+        let mk = |label: &'static str, kind: MenuKind| -> Element<'static, Message> {
+            let active = self.open_menu.as_ref() == Some(&kind);
+            button(text(label).size(12u16))
+                .on_press(Message::ToggleMenu(kind))
+                .style(if active {
+                    crate::theme::menu_bar_active
+                } else {
+                    crate::theme::menu_bar_item
+                })
+                .padding([4u16, 12u16])
+                .into()
+        };
+        container(row![
+            mk("File",  MenuKind::File),
+            mk("Edit",  MenuKind::Edit),
+            mk("Build", MenuKind::Build),
+            mk("View",  MenuKind::View),
+            mk("Help",  MenuKind::Help),
+            Space::with_width(Length::Fill),
+        ].spacing(0).align_y(Alignment::Center).height(28))
+        .width(Length::Fill)
+        .style(crate::theme::menu_bar_bg)
+        .into()
+    }
+
+    /// Render the open dropdown under the menu bar.
+    fn view_menu_dropdown(&self, menu: &MenuKind) -> Element<'_, Message> {
+        // Approximate left offset (px) for each menu button from window left edge.
+        let left: f32 = match menu {
+            MenuKind::File  =>   0.0,
+            MenuKind::Edit  =>  50.0,
+            MenuKind::Build => 100.0,
+            MenuKind::View  => 160.0,
+            MenuKind::Help  => 212.0,
+        };
+
+        let items: Vec<Element<Message>> = match menu {
+            MenuKind::File => vec![
+                dmi("~  New Project",           Message::NewProject),
+                dmi("~  Open Project   Ctrl+O", Message::OpenProject),
+                dms(),
+                dmi("+  New File       Ctrl+N", Message::NewFile),
+                dmi("Save       Ctrl+S", Message::SaveFile),
+                dmi("Save All   Ctrl+S+S",Message::SaveAll),
+                dmi("✕  Close Tab",             Message::CloseActiveTab),
+                dms(),
+                dmi("*  Settings",              Message::ShowSettings),
+                dms(),
+                dmi("✗  Quit",                  Message::Quit),
+            ],
+            MenuKind::Edit => vec![
+                dmi("←  Undo      Ctrl+Z", Message::Noop),
+                dmi("→  Redo      Ctrl+Y", Message::Noop),
+                dms(),
+                dmi("✂  Cut       Ctrl+X", Message::Noop),
+                dmi("[]  Copy      Ctrl+C", Message::Noop),
+                dmi("[.]  Paste     Ctrl+V", Message::Noop),
+                dmi("≡  Select All  Ctrl+A", Message::SelectAll),
+                dms(),
+                dmi("%  Comment/Uncomment Line", Message::CommentLine),
+            ],
+            MenuKind::Build => {
+                let c = &self.compile_options.compiler;
+                vec![
+                    dmi("▶  Compile  Ctrl+B", Message::Compile),
+                    dms(),
+                    dmtick("pdfLaTeX",  *c == CompilerKind::PdfLatex,
+                        Message::CompileOptionChanged(CompileOptionMsg::SetCompiler("pdflatex".into()))),
+                    dmtick("XeLaTeX",   *c == CompilerKind::XeLatex,
+                        Message::CompileOptionChanged(CompileOptionMsg::SetCompiler("xelatex".into()))),
+                    dmtick("LuaLaTeX",  *c == CompilerKind::LuaLatex,
+                        Message::CompileOptionChanged(CompileOptionMsg::SetCompiler("lualatex".into()))),
+                    dms(),
+                    dmcheck("BibTeX",       self.compile_options.bibtex,
+                        Message::CompileOptionChanged(CompileOptionMsg::ToggleBibtex)),
+                    dmcheck("Shell Escape", self.compile_options.shell_escape,
+                        Message::CompileOptionChanged(CompileOptionMsg::ToggleShellEscape)),
+                ]
+            },
+            MenuKind::View => vec![
+                dmcheck("Sidebar     Ctrl+\\", self.sidebar_visible,   Message::ToggleSidebar),
+                dmcheck("Log Panel",           self.log_panel_visible,  Message::ToggleLogPanel),
+                dms(),
+                dmi("+  Zoom In",   Message::PdfZoomIn),
+                dmi("-  Zoom Out",  Message::PdfZoomOut),
+                dmi("[.]  Fit Page",  Message::PdfZoomFit),
+                dms(),
+                dmi("◂  Prev Page", Message::PdfPrevPage),
+                dmi("▸  Next Page", Message::PdfNextPage),
+            ],
+            MenuKind::Help => vec![
+                dmi("kb  Keyboard Shortcuts", Message::ShowKeyboardShortcuts),
+                dms(),
+                dmi("(i) About Ferroleaf",    Message::About),
+            ],
+        };
+
+        let dropdown = container(column(items).spacing(0).padding([4u16, 0u16]))
+            .style(crate::theme::menu_dropdown_bg)
+            .width(240);
+
+        // Position using Space offsets inside a full-window container.
+        container(
+            column![
+                Space::with_height(Length::Fixed(70.0)), // toolbar(42) + menu-bar(28)
+                row![
+                    Space::with_width(Length::Fixed(left)),
+                    dropdown,
+                ]
+            ]
+        )
+        .width(Length::Fill).height(Length::Fill)
+        .into()
+    }
+
+    /// Render the right-click context menu at the stored click position.
+    fn view_context_menu_overlay(&self, ctx: &ContextMenuState) -> Element<'_, Message> {
+        let items: Vec<Element<Message>> = match ctx.kind {
+            ContextMenuKind::Editor => vec![
+                dmi("←  Undo",           Message::Noop),
+                dmi("→  Redo",           Message::Noop),
+                dms(),
+                dmi("✂  Cut",            Message::Noop),
+                dmi("[]  Copy",           Message::Noop),
+                dmi("[.]  Paste",          Message::Noop),
+                dmi("≡  Select All",     Message::SelectAll),
+                dms(),
+                dmi("%  Comment / Uncomment Line", Message::CommentLine),
+                dms(),
+                dmi("▶  Compile  Ctrl+B", Message::Compile),
+            ],
+            ContextMenuKind::PdfViewer => {
+                let page = self.pdf_viewer.current_page;
+                let (pw, ph) = (ctx.page_w, ctx.page_h);
+                vec![
+                    dmi("-> Jump to Source", Message::SynctexAt {
+                        page, x: ctx.x, y: ctx.y, page_w: pw, page_h: ph,
+                    }),
+                    dms(),
+                    dmi("+  Zoom In",   Message::PdfZoomIn),
+                    dmi("-  Zoom Out",  Message::PdfZoomOut),
+                    dmi("[.]  Fit Page",  Message::PdfZoomFit),
+                    dms(),
+                    dmi("◂  Prev Page", Message::PdfPrevPage),
+                    dmi("▸  Next Page", Message::PdfNextPage),
+                    dms(),
+                    dmi("↻  Recompile", Message::Compile),
+                ]
+            },
+        };
+
+        let menu = container(column(items).spacing(0).padding([4u16, 0u16]))
+            .style(crate::theme::menu_dropdown_bg)
+            .width(230);
+
+        // Clamp so the menu never overflows the right / bottom edge.
+        let cx = ctx.x.min(self.window_width  - 240.0).max(0.0);
+        let cy = ctx.y.min(self.window_height - 360.0).max(0.0);
+
+        container(
+            column![
+                Space::with_height(Length::Fixed(cy)),
+                row![
+                    Space::with_width(Length::Fixed(cx)),
+                    menu,
+                ]
+            ]
+        )
+        .width(Length::Fill).height(Length::Fill)
+        .into()
+    }
+
     fn view_log(&self) -> Element<Message> {
         let diags: Vec<Element<Message>> = self.compile_status.last_result().map(|r| {
             r.diagnostics.iter().map(|d| {
                 let (pfx, col) = match d.level {
                     DiagnosticLevel::Error   => ("✖", Palette::ERROR),
                     DiagnosticLevel::Warning => ("⚠", Palette::WARNING),
-                    DiagnosticLevel::Info    => ("ℹ", Palette::TEXT_DIM),
+                    DiagnosticLevel::Info    => ("i", Palette::TEXT_DIM),
                 };
                 let loc = match (d.file.as_ref(), d.line) {
                     (Some(f), Some(l)) => format!("{}:{} — ", f, l),
@@ -582,7 +934,7 @@ impl Ferroleaf {
             row![
                 text("Compiler Log").size(12).color(Palette::TEXT_DIM),
                 Space::with_width(Length::Fill),
-                ib("🗑", Message::ClearLog),
+                ib("Clr", Message::ClearLog),
                 ib("✕", Message::ToggleLogPanel),
             ].align_y(Alignment::Center).padding([4u16, 8u16]),
             horizontal_rule(1).style(crate::theme::subtle_rule),
@@ -613,8 +965,8 @@ impl Ferroleaf {
         let pill = match &self.compile_status {
             CompileStatus::Idle => text("●").size(11u16).color(Palette::TEXT_DIM),
             CompileStatus::Compiling { pass, total } =>
-                text(format!("⟳ {}/{}", pass, total)).size(11u16).color(Palette::WARNING),
-            CompileStatus::RunningBibtex => text("⟳ BibTeX").size(11u16).color(Palette::WARNING),
+                text(format!("→ {}/{}", pass, total)).size(11u16).color(Palette::WARNING),
+            CompileStatus::RunningBibtex => text("→ BibTeX").size(11u16).color(Palette::WARNING),
             CompileStatus::Success(_)    => text("✔ OK").size(11u16).color(Palette::SUCCESS),
             CompileStatus::Failed(_)     => text("✖ Error").size(11u16).color(Palette::ERROR),
         };
@@ -738,10 +1090,80 @@ impl Ferroleaf {
 // ── Free widget helpers ───────────────────────────────────────────────────────
 
 fn ib(icon: &'static str, msg: Message) -> Element<'static, Message> {
-    button(text(icon).size(14u16)).on_press(msg)
+    button(text(icon).size(18u16))
+        .on_press(msg)
         .style(crate::theme::icon_button)
-        .padding([4u16, 8u16])
+        .padding([4u16, 10u16])
         .into()
+}
+
+/// Colored icon button — bigger than the old `ib`, with a per-icon accent color.
+fn cib(icon: &'static str, msg: Message, color: Color) -> Element<'static, Message> {
+    button(text(icon).size(18u16).color(color))
+        .on_press(msg)
+        .style(crate::theme::icon_button)
+        .padding([4u16, 10u16])
+        .into()
+}
+
+/// Menu / context-menu item button.
+fn dmi(label: impl ToString, msg: Message) -> Element<'static, Message> {
+    button(
+        text(label.to_string()).size(13u16).color(Palette::TEXT_SECONDARY)
+    )
+    .on_press(msg)
+    .style(crate::theme::menu_item)
+    .width(Length::Fill)
+    .padding([7u16, 16u16])
+    .into()
+}
+
+/// Menu separator rule.
+fn dms() -> Element<'static, Message> {
+    container(horizontal_rule(1).style(crate::theme::subtle_rule))
+        .padding([3u16, 8u16])
+        .width(Length::Fill)
+        .into()
+}
+
+/// Menu item with a checkmark toggle (☑/☐ prefix).
+fn dmcheck(label: &str, checked: bool, msg: Message) -> Element<'static, Message> {
+    let prefix = if checked { "✔ " } else { "  " };
+    let color  = if checked { Palette::PINK_BRIGHT } else { Palette::TEXT_SECONDARY };
+    button(
+        text(format!("{}{}", prefix, label)).size(13u16).color(color)
+    )
+    .on_press(msg)
+    .style(crate::theme::menu_item)
+    .width(Length::Fill)
+    .padding([7u16, 16u16])
+    .into()
+}
+
+/// Menu item with a radio-button indicator (● / space prefix).
+fn dmtick(label: &str, selected: bool, msg: Message) -> Element<'static, Message> {
+    let prefix = if selected { "● " } else { "  " };
+    let color  = if selected { Palette::PINK_BRIGHT } else { Palette::TEXT_SECONDARY };
+    button(
+        text(format!("{}{}", prefix, label)).size(13u16).color(color)
+    )
+    .on_press(msg)
+    .style(crate::theme::menu_item)
+    .width(Length::Fill)
+    .padding([7u16, 16u16])
+    .into()
+}
+
+/// Invisible full-window button that dismisses any open menu/context-menu.
+fn dismiss_catcher() -> Element<'static, Message> {
+    button(
+        container(Space::new(Length::Fill, Length::Fill))
+            .width(Length::Fill).height(Length::Fill)
+    )
+    .on_press(Message::Dismiss)
+    .style(|_, _| button::Style { background: None, ..Default::default() })
+    .width(Length::Fill).height(Length::Fill)
+    .into()
 }
 
 fn blank(label: &'static str) -> Element<'static, Message> {
@@ -775,7 +1197,7 @@ fn tog(label: &'static str, on: bool, msg: Message) -> Element<'static, Message>
 
 fn overlay_welcome(base: Element<'_, Message>) -> Element<'_, Message> {
     let card = container(column![
-        text("⊛ Ferroleaf").size(38u16).color(Palette::PINK_BRIGHT),
+        text("# Ferroleaf").size(38u16).color(Palette::PINK_BRIGHT),
         text("Native LaTeX editor for Linux").size(13u16).color(Palette::TEXT_SECONDARY),
         Space::with_height(24),
         button(text("  Open Project Folder  ").size(14u16))
