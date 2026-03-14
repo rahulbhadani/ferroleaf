@@ -1,1 +1,775 @@
-target/
+# =============================================================================
+# MASTER .GITIGNORE — All Major Programming Languages & Environments
+# =============================================================================
+# Why use .gitignore?
+#   Git tracks every file in your project unless told otherwise. Many tools
+#   generate files that are machine-specific, auto-rebuilt, contain secrets,
+#   or are simply too large/noisy for version control. Committing these causes
+#   merge conflicts, bloated repos, security leaks, and broken cross-platform
+#   builds. This file tells Git to silently ignore them.
+# =============================================================================
+
+
+# =============================================================================
+# SECTION 1 — OPERATING SYSTEM FILES
+# Generated automatically by macOS, Windows, and Linux. They encode local
+# display preferences and file metadata that differ per machine — committing
+# them causes noisy diffs and conflicts for every collaborator.
+# =============================================================================
+
+# --- macOS ---
+.DS_Store                  # Finder folder-view settings (icon positions, sort order)
+.DS_Store?                 # Variant created on network drives
+._*                        # Resource fork / extended-attribute sidecar files
+.Spotlight-V100            # Spotlight search index for a volume
+.Trashes                   # macOS Trash metadata on external volumes
+.AppleDouble               # AppleDouble-format resource forks
+.LSOverride                # Launch Services override database
+Icon                       # Custom folder icon file (has a hidden carriage return in the name)
+.AppleDB                   # Apple desktop database
+.AppleDesktop              # Apple desktop metadata
+
+# --- Windows ---
+Thumbs.db                  # Explorer thumbnail cache — per-machine, not project data
+Thumbs.db:encryptable      # Encrypted variant of thumbnail cache
+ehthumbs.db                # Windows Media Center thumbnail cache
+ehthumbs_vista.db          # Vista-era thumbnail cache
+Desktop.ini                # Folder customisation settings (layout, icon, tooltip)
+$RECYCLE.BIN/              # Windows Recycle Bin metadata folder
+*.cab                      # Windows Cabinet compressed archive (build artifact)
+*.msi                      # Windows Installer package (build artifact)
+*.msm                      # Windows Installer merge module
+*.msp                      # Windows Installer patch
+*.lnk                      # Windows shortcut — machine-specific absolute paths inside
+[Dd]esktop.ini             # Case-insensitive match for Desktop.ini
+*.stackdump                # Cygwin crash dump
+
+# --- Linux ---
+*~                         # Backup files created by many Linux text editors (nano, gedit)
+.fuse_hidden*              # Temporary files created by FUSE mounts
+.directory                 # KDE Dolphin folder metadata
+.Trash-*                   # Per-user trash directories on Linux filesystems
+.nfs*                      # Stale NFS lock files left after a crash
+
+
+# =============================================================================
+# SECTION 2 — EDITORS & IDEs
+# Each editor stores its own project config, workspace state, and plugin data
+# locally. These are personal preferences — forcing them on collaborators breaks
+# their setup and creates pointless conflicts.
+# =============================================================================
+
+# --- Visual Studio Code ---
+.vscode/                   # Workspace settings, launch configs, extension recommendations
+!.vscode/settings.json     # Exception: shared formatter/linting rules are useful to commit
+!.vscode/extensions.json   # Exception: recommended extensions list can be shared
+!.vscode/launch.json       # Exception: shared debug launch configs
+.history/                  # Local History extension — per-machine edit history
+*.vsix                     # VS Code extension package (binary build artifact)
+
+# --- JetBrains IDEs (IntelliJ, PyCharm, WebStorm, GoLand, Rider …) ---
+.idea/                     # Entire IDE project directory (workspace, run configs, indexes)
+!.idea/codeStyles/         # Exception: shared code style settings
+!.idea/inspectionProfiles/ # Exception: shared inspection (lint) profiles
+*.iws                      # IntelliJ workspace file — machine-specific open tabs / layout
+*.iml                      # IntelliJ module file — auto-regenerated from build tool
+*.ipr                      # IntelliJ project file (old format, replaced by .idea/)
+out/                       # IntelliJ default compiled-output directory
+cmake-build-*/             # CLion CMake build directories
+
+# --- Eclipse ---
+.project                   # Eclipse project descriptor — contains machine-specific paths
+.classpath                 # Eclipse Java classpath — rebuilt by Maven/Gradle
+.settings/                 # Eclipse per-project settings (formatter, compiler)
+.loadpath                  # Eclipse PHP project loadpath
+.buildpath                 # Eclipse PHP build path
+bin/                       # Eclipse default Java bytecode output folder
+
+# --- NetBeans ---
+nbproject/private/         # NetBeans private project files (machine-specific)
+nbbuild/                   # NetBeans build output
+nbdist/                    # NetBeans distribution output
+.nb-gradle/                # NetBeans Gradle support cache
+
+# --- Vim / Neovim ---
+*.swp                      # Vim swap file — open-file recovery buffer
+*.swo                      # Vim secondary swap file
+*.swn                      # Vim tertiary swap file
+*~                         # Vim backup file (also matches generic Linux backups above)
+.netrwhist                 # Vim netrw browsing history
+Session.vim                # Vim session file — restores window layout / open files
+.vim/                      # Local Vim config directory
+tags                       # ctags/cscope tag file — auto-generated code index
+
+# --- Emacs ---
+\#*\#                      # Emacs auto-save file (created on crash, deleted on clean exit)
+/.emacs.desktop            # Emacs desktop file — saved session state
+/.emacs.desktop.lock       # Lock file preventing two Emacs instances from loading session
+*.elc                      # Compiled Emacs Lisp bytecode
+auto-save-list             # Emacs list of auto-save files
+tramp                      # Emacs Tramp remote-connection state
+.\#*                       # Emacs lock symlinks (created while editing a file)
+
+# --- Sublime Text ---
+*.tmlanguage.cache         # Sublime compiled syntax grammar cache
+*.tmPreferences.cache      # Sublime compiled preferences cache
+*.stTheme.cache            # Sublime compiled theme cache
+*.sublime-workspace        # Sublime workspace — open files, pane layout (machine-specific)
+*.sublime-project          # Sublime project file (may contain absolute paths)
+sftp-config.json           # Sublime SFTP plugin config — may contain credentials!
+Package Control.last-run   # Sublime Package Control metadata
+Package Control.ca-list    # Package Control CA bundle
+Package Control.ca-bundle  # Package Control CA bundle (alternate)
+Package Control.system-ca-bundle # System CA bundle reference
+
+# --- Atom ---
+.atom/                     # Atom editor settings and packages directory
+
+# --- TextMate ---
+*.tmproj                   # TextMate project file
+*.tmproject                # TextMate project file (alternate extension)
+tmtags                     # TextMate tags file
+
+# --- Notepad++ ---
+nppBackup/                 # Notepad++ backup files directory
+
+# --- Xcode ---
+*.xcodeproj/xcuserdata/    # Per-developer breakpoints, scheme, and window state
+*.xcworkspace/xcuserdata/  # Same, for workspaces
+*.xcworkspace/xcshareddata/previews/ # Xcode canvas preview snapshots
+*.moved-aside              # Files renamed by Xcode during a framework migration
+*.pbxuser                  # Old Xcode per-user project settings
+*.mode1v3                  # Xcode 3 window mode file
+*.mode2v3                  # Xcode 3 alternate window mode file
+*.perspectivev3            # Xcode 3 perspective file
+DerivedData/               # Xcode build products and intermediate files (large, auto-rebuilt)
+*.hmap                     # Xcode header map (auto-generated C/C++ include index)
+*.ipa                      # Compiled iOS application archive (build artifact)
+*.xcarchive                # Xcode archive (build artifact, often hundreds of MB)
+
+
+# =============================================================================
+# SECTION 3 — DEPENDENCY DIRECTORIES
+# Package managers download and install dependencies on demand from a lockfile.
+# Committing these directories bloats the repo (often hundreds of MB), creates
+# OS-specific binary conflicts, and gives a false sense of reproducibility.
+# =============================================================================
+
+# --- JavaScript / Node.js ---
+node_modules/              # npm/yarn/pnpm installed packages — restored via package-lock.json
+npm-debug.log*             # npm error log — per-run diagnostics, not project state
+yarn-debug.log*            # Yarn debug log
+yarn-error.log*            # Yarn error log
+.pnpm-debug.log*           # pnpm debug log
+.npm/                      # npm cache directory
+.yarn/cache                # Yarn Berry (v2+) download cache (commit only if using Zero-Installs)
+.yarn/unplugged            # Yarn Berry unpacked native modules
+.yarn/build-state.yml      # Yarn Berry build state
+.pnp.js                    # Yarn Plug'n'Play loader (commit only if using PnP)
+.pnp.cjs                   # Yarn PnP loader (CJS variant)
+
+# --- Python ---
+__pycache__/               # Python 3 bytecode cache directory
+*.py[cod]                  # Compiled Python bytecode (.pyc, .pyo, .pyd) — machine-specific
+*$py.class                 # Jython compiled class file
+*.egg                      # Python egg distribution archive
+*.egg-info/                # Python egg metadata directory (generated by setuptools)
+dist/                      # Python distribution output (sdist, wheel)
+build/                     # Python build directory
+eggs/                      # Deprecated Python eggs directory
+.eggs/                     # Pytest eggs cache
+.tox/                      # tox virtualenv/test automation directory
+.nox/                      # nox virtualenv/automation directory
+.venv/                     # Virtual environment (common name)
+venv/                      # Virtual environment (alternate common name)
+env/                       # Virtual environment (alternate name)
+ENV/                       # Virtual environment (alternate name, uppercase)
+.Python                    # Virtualenv Python symlink
+pip-wheel-metadata/        # pip wheel build metadata
+.pytype/                   # pytype static analysis output
+.mypy_cache/               # mypy type-checker cache
+.pyre/                     # Pyre (Facebook) type-checker cache
+.dmypy.json                # mypy daemon state
+dmypy.json                 # mypy daemon state (alternate location)
+.pybuilder/                # PyBuilder build tool output
+target/                    # PyBuilder target directory
+Pipfile.lock               # Pipenv lockfile — commit this! (listed here as reminder only)
+poetry.lock                # Poetry lockfile — commit this! (listed here as reminder only)
+instance/                  # Flask per-instance config and SQLite database folder
+.webassets-cache           # Flask-Assets compiled asset cache
+celerybeat-schedule        # Celery beat periodic-task schedule state
+celerybeat.pid             # Celery beat PID file
+
+# --- Ruby ---
+*.gem                      # Compiled Ruby gem archive (build artifact)
+*.rbc                      # Rubinius compiled bytecode
+/.bundle/                  # Bundler local plugin config
+/vendor/bundle             # Bundler installed gems (restored via `bundle install`)
+Gemfile.lock               # Note: COMMIT this for applications, ignore for libraries
+.bundle/config             # Bundler local machine config (may contain credentials)
+.rubocop-*                 # RuboCop generated cache/result files
+
+# --- Java / JVM ---
+*.class                    # Java compiled bytecode — always rebuilt from source
+*.jar                      # Java archive (build artifact — unless it's a library you ship)
+*.war                      # Java web application archive (build artifact)
+*.ear                      # Java enterprise application archive (build artifact)
+*.nar                      # Apache NiFi archive
+hs_err_pid*                # JVM crash dump — diagnostic only
+replay_pid*                # JVM replay compilation log
+.gradle/                   # Gradle per-project cache and daemon files
+gradle-app.setting         # Gradle App plugin settings
+.gradletasknamecache       # Gradle task name cache
+!gradle/wrapper/gradle-wrapper.jar  # Exception: Gradle wrapper JAR should be committed
+build/                     # Gradle/Maven default build output directory
+out/                       # IntelliJ/Gradle alternate build output
+target/                    # Maven default build output directory
+pom.xml.tag                # Maven release plugin backup
+pom.xml.releaseBackup      # Maven release plugin backup
+pom.xml.versionsBackup     # Maven versions plugin backup
+pom.xml.next               # Maven release plugin next version
+release.properties         # Maven release plugin properties
+dependency-reduced-pom.xml # Maven Shade plugin generated POM
+buildNumber.properties     # Maven build number plugin output
+.mvn/timing.properties     # Maven internal build timing
+.mvn/wrapper/maven-wrapper.jar  # Note: COMMIT this if using Maven wrapper
+
+# --- C / C++ ---
+*.o                        # Compiled object file — rebuilt from source
+*.obj                      # Windows compiled object file
+*.lo                       # libtool compiled object
+*.la                       # libtool library file
+*.a                        # Static library archive
+*.lib                      # Windows static library
+*.so                       # Unix shared library (dynamic)
+*.so.*                     # Versioned Unix shared library
+*.dylib                    # macOS shared library (dynamic)
+*.dll                      # Windows dynamic-link library
+*.exe                      # Windows executable (build artifact)
+*.out                      # Unix executable / linker output (build artifact)
+*.app                      # macOS application bundle
+*.i*86                     # 32-bit Linux ELF binary
+*.x86_64                   # 64-bit Linux ELF binary
+*.hex                      # Firmware hex file (embedded build artifact)
+Makefile.in                # autoconf-generated Makefile template
+configure                  # autoconf-generated configure script
+autom4te.cache/            # autoconf cache directory
+config.cache               # autoconf configuration cache
+config.log                 # autoconf configuration log
+config.status              # autoconf generated status script
+.deps/                     # automake dependency tracking directory
+.libs/                     # libtool build directory
+CMakeCache.txt             # CMake build cache — machine-specific
+CMakeFiles/                # CMake build system files
+cmake_install.cmake        # CMake install script
+install_manifest.txt       # CMake install manifest
+CTestTestfile.cmake        # CTest test file
+_deps/                     # CMake FetchContent downloaded dependencies
+
+# --- C# / .NET ---
+*.user                     # Visual Studio per-user project settings
+*.suo                      # Visual Studio solution user options (machine-specific)
+*.userosscache             # VS user options cache
+*.sln.docstates            # VS document state
+[Dd]ebug/                  # Default Debug build output
+[Rr]elease/                # Default Release build output
+x64/                       # 64-bit build output
+x86/                       # 32-bit build output
+[Aa][Rr][Mm]/              # ARM build output
+[Aa][Rr][Mm]64/            # ARM64 build output
+bld/                       # Build output
+[Bb]in/                    # Binaries output directory
+[Oo]bj/                    # Intermediate object files
+[Ll]og/                    # Build log directory
+[Ll]ogs/                   # Build logs directory
+*.nupkg                    # NuGet package (build artifact)
+*.snupkg                   # NuGet symbols package
+*.nuget.props              # NuGet restore generated props
+*.nuget.targets            # NuGet restore generated targets
+project.lock.json          # .NET Core project lockfile (replaced by obj/project.assets.json)
+project.fragment.lock.json # .NET Core project fragment lockfile
+artifacts/                 # .NET build artifacts
+_ReSharper*/               # ReSharper cache and generated files
+*.ReSharper                # ReSharper project settings (use shared settings instead)
+_NCrunch_*                 # NCrunch test runner data
+nCrunchTemp_*              # NCrunch temporary files
+.vs/                       # Visual Studio 2015+ local settings and solution explorer state
+Generated_Code/            # Code generation output
+
+# --- Go ---
+*.exe                      # Go compiled Windows binary
+*.exe~                     # Go Windows binary backup
+*.dll                      # Go compiled Windows DLL (cgo)
+*.so                       # Go compiled Unix shared library (cgo)
+vendor/                    # Go vendor directory — dependencies pinned locally (optional)
+/bin/                      # Go compiled binary output (local convention)
+/tmp/                      # Temporary files
+go.sum                     # Note: COMMIT this — it's the cryptographic lockfile
+
+# --- Rust ---
+target/                    # Cargo build output (debug, release, tests) — rebuilt via `cargo build`
+Cargo.lock                 # Note: COMMIT for binaries; ignore for libraries (commented out below)
+# Cargo.lock               # Uncomment to ignore lockfile for library crates
+
+# --- PHP ---
+/vendor/                   # Composer installed packages — restored via `composer install`
+composer.phar              # Composer binary (should be installed globally, not committed)
+.phpunit.result.cache      # PHPUnit test result cache
+.phpunit.cache/            # PHPUnit cache directory
+.php_cs.cache              # PHP-CS-Fixer cache
+.php-cs-fixer.cache        # PHP-CS-Fixer cache (newer name)
+.phpstan/                  # PHPStan analysis cache
+.psalm/                    # Psalm analysis cache
+
+# --- Swift / iOS / macOS ---
+.build/                    # Swift Package Manager build directory
+*.resolved                 # SPM package-resolved file (analogous to package-lock; consider committing)
+Pods/                      # CocoaPods installed dependencies — restored via `pod install`
+Podfile.lock               # Note: COMMIT this — it pins the exact CocoaPods versions
+Carthage/Build/            # Carthage build artifacts — pre-built frameworks (large)
+fastlane/report.xml        # Fastlane automation report
+fastlane/Preview.html      # Fastlane test preview HTML
+fastlane/screenshots/      # Fastlane auto-captured screenshots
+fastlane/test_output/      # Fastlane test output
+*.xcresult                 # Xcode test result bundle (large binary)
+
+# --- Kotlin ---
+*.class                    # Compiled JVM bytecode (same as Java)
+.kotlin/                   # Kotlin daemon and tooling cache
+
+# --- Scala ---
+*.class                    # Compiled JVM bytecode
+*.log                      # Compilation / runtime logs
+.bsp/                      # Build Server Protocol workspace metadata
+.bloop/                    # Bloop build server cache
+project/project/           # sbt metabuild generated files
+project/target/            # sbt metabuild compiled output
+target/                    # sbt build output
+
+# --- Dart / Flutter ---
+.dart_tool/                # Dart tooling cache (pub, build_runner, etc.)
+.flutter-plugins           # Flutter plugin list (auto-generated)
+.flutter-plugins-dependencies  # Flutter plugin dependency graph (auto-generated)
+.pub-cache/                # Dart pub package download cache
+.pub/                      # Dart pub workspace cache
+build/                     # Flutter build output (Android APK, iOS IPA, web bundle)
+*.g.dart                   # Generated Dart code (json_serializable, etc.) — debated; often committed
+
+# --- R ---
+.Rhistory                  # R console command history — personal, not project
+.Rapp.history              # R application history
+.RData                     # R workspace data dump — machine-specific, potentially large
+.Ruserdata                 # R user data
+*.Rproj.user/              # RStudio per-user project settings
+.Rproj.user                # RStudio user project folder
+
+# --- MATLAB ---
+*.asv                      # MATLAB auto-save backup file
+*.m~                       # MATLAB editor backup
+*.mex*                     # Compiled MATLAB MEX binary (machine/OS-specific)
+octave-workspace           # GNU Octave workspace state file
+slprj/                     # Simulink generated code and build output
+sccprj/                    # Stateflow generated code
+codegen/                   # MATLAB Coder / Simulink Coder generated C code
+
+# --- Julia ---
+*.jl.cov                   # Julia test coverage data
+*.jl.*.cov                 # Julia coverage variant
+*.jl.mem                   # Julia memory allocation profiling data
+/deps/usr/                 # Julia package compiled dependency binaries
+Manifest.toml              # Julia package manifest — commit for apps, ignore for packages
+
+# --- Haskell ---
+dist/                      # Cabal distribution output
+dist-newstyle/             # Cabal new-build (v2) output directory
+cabal-dev/                 # cabal-dev sandbox
+*.o                        # Compiled object file
+*.hi                       # GHC interface file (auto-generated, indexes module exports)
+*.dyn_o                    # GHC dynamic object file
+*.dyn_hi                   # GHC dynamic interface file
+.hpc/                      # HPC (Haskell Program Coverage) coverage data
+.hsenv/                    # Haskell virtual environment
+.cabal-sandbox/            # Cabal sandbox directory
+cabal.sandbox.config       # Cabal sandbox configuration
+.ghc.environment.*         # GHC environment file
+stack-work/                # Stack build artifacts and installed packages
+
+# --- Elixir / Erlang ---
+/_build/                   # Mix/rebar3 build output (compiled BEAM bytecode)
+/cover/                    # ExCoveralls coverage report output
+/deps/                     # Mix dependency sources — restored via `mix deps.get`
+/doc/                      # ExDoc generated documentation
+/.fetch                    # Hex package fetch marker
+erl_crash.dump             # Erlang VM crash dump (diagnostic only)
+*.beam                     # Compiled Erlang/Elixir bytecode
+*.plt                      # Dialyzer persistent lookup table (large, slow to build)
+.elixir_ls/                # ElixirLS language server cache
+
+# --- Clojure ---
+/target/                   # Leiningen/deps.edn build output
+/classes/                  # Compiled Clojure class files
+/checkouts/                # Leiningen checkout dependencies
+profiles.clj               # Local Leiningen profiles (may contain credentials / machine paths)
+pom.xml                    # Auto-generated Maven POM (for Maven-based builds)
+pom.xml.asc                # Maven POM signature
+*.jar                      # Build artifact JAR
+*.class                    # Compiled JVM bytecode
+/.lein-*                   # Leiningen local state files
+/.nrepl-port               # nREPL server port file (changes per session)
+.cpcache/                  # Clojure CLI tools dependency cache
+
+# --- Lua ---
+luac.out                   # Lua compiler output
+*.luac                     # Compiled Lua bytecode
+
+# --- Perl ---
+blib/                      # Perl MakeMaker build library output
+Makefile                   # Perl MakeMaker generated Makefile
+Makefile.old               # MakeMaker backup Makefile
+pm_to_blib                 # MakeMaker intermediate file
+MYMETA.*                   # Perl auto-generated META files (from Build.PL / Makefile.PL)
+*.bs                       # Perl XS bootstrap file
+*.bak                      # Editor backup file (common in Perl projects)
+nytprof.out                # NYTProf profiling output
+
+# --- OCaml ---
+*.cmo                      # OCaml compiled object
+*.cma                      # OCaml library archive
+*.cmi                      # OCaml compiled interface
+*.cmx                      # OCaml native compiled object
+*.cmxs                     # OCaml native dynamically-loaded plugin
+*.cmxa                     # OCaml native library archive
+*.native                   # OCaml native binary (build artifact)
+*.byte                     # OCaml bytecode binary (build artifact)
+_build/                    # Dune (OCaml build tool) build directory
+
+# --- F# ---
+*.fsi                      # F# signature file (can be auto-generated)
+*.fsx.lock                 # F# script dependency lock
+.ionide/                   # Ionide (VS Code F# plugin) project cache
+
+# --- Groovy ---
+*.class                    # Compiled JVM bytecode
+
+# --- Nim ---
+nimcache/                  # Nim compiler cache and C translation output
+
+# --- Crystal ---
+/.shards/                  # Crystal Shards package cache
+/lib/                      # Crystal Shards installed dependencies
+
+# --- D Language ---
+*.o                        # Compiled object file
+*.obj                      # Windows compiled object
+*.a                        # Static library
+*.lib                      # Windows static library
+*.so                       # Shared library
+
+# --- Assembly ---
+*.o                        # Assembled object file
+*.lst                      # Assembler listing file
+*.map                      # Linker map file
+
+
+# =============================================================================
+# SECTION 4 — BUILD TOOLS & TASK RUNNERS
+# Build outputs are always regenerated — committing them causes multi-MB diffs
+# on trivial code changes and prevents reproducible builds from source.
+# =============================================================================
+
+# --- webpack ---
+.cache/                    # webpack persistent cache (speeds up rebuilds, not project data)
+dist/                      # webpack bundle output — rebuilt on deploy
+.parcel-cache/             # Parcel bundler cache
+
+# --- Vite ---
+dist/                      # Vite production build output
+.vite/                     # Vite dev server cache
+
+# --- Rollup ---
+.rollup.cache/             # Rollup build cache
+
+# --- Grunt / Gulp ---
+.grunt/                    # Grunt plugin cache
+.sass-cache/               # Sass/SCSS compiled cache (used by many task runners)
+
+# --- Bower ---
+bower_components/          # Bower installed front-end packages (deprecated, use npm)
+
+# --- Bazel ---
+bazel-*                    # Bazel symlinked output directories (bazel-bin, bazel-out, etc.)
+/bazel-out                 # Bazel output directory
+
+# --- Buck ---
+buck-out/                  # Buck build output directory
+
+# --- Make ---
+*.d                        # GCC auto-generated dependency files for incremental builds
+
+
+# =============================================================================
+# SECTION 5 — TEST & COVERAGE OUTPUTS
+# Test results and coverage reports are generated by CI — committing them makes
+# the repo reflect the last local run rather than the canonical CI state.
+# =============================================================================
+
+coverage/                  # Code coverage report directory (JavaScript/generic)
+*.lcov                     # LCOV coverage data file
+.nyc_output/               # Istanbul/nyc raw coverage data (JavaScript)
+htmlcov/                   # Python coverage.py HTML report
+.coverage                  # Python coverage.py binary data file
+.coverage.*                # Python coverage.py combined data
+coverage.xml               # Python/generic XML coverage report (e.g., for Codecov)
+nosetests.xml              # Nose test results XML
+pytest-report.html         # Pytest HTML report
+test-results/              # Generic test results directory
+test-output/               # Generic test output directory
+junit.xml                  # JUnit XML test results (used by many CI systems)
+report.xml                 # Generic XML test report
+*.test                     # Compiled Go test binary
+
+
+# =============================================================================
+# SECTION 6 — ENVIRONMENT & SECRETS
+# THE MOST CRITICAL SECTION. These files often contain API keys, database
+# passwords, OAuth secrets, and private keys. Committing them — even briefly —
+# can permanently expose credentials via Git history and leak to public repos.
+# =============================================================================
+
+.env                       # Shell environment variables — almost always contains secrets
+.env.*                     # All .env variants (.env.local, .env.production, .env.test …)
+!.env.example              # Exception: commit the template file with placeholder values
+!.env.sample               # Exception: commit the sample/template file
+!.env.template             # Exception: commit the template file
+.envrc                     # direnv environment file — may contain secrets
+secrets.yml                # Rails / generic secrets file
+secrets.json               # Generic secrets JSON
+secrets.toml               # Generic secrets TOML
+credentials.json           # Generic credentials (e.g., Google service account key)
+credentials.yml.enc        # Rails encrypted credentials (the key file is the secret)
+config/master.key          # Rails master encryption key — NEVER commit this
+config/credentials/*.key   # Rails per-environment encryption keys
+*.pem                      # PEM-encoded certificate or private key
+*.key                      # Generic private key file
+*.p12                      # PKCS#12 certificate + private key bundle
+*.pfx                      # PFX certificate bundle (Windows name for PKCS#12)
+*.cer                      # DER/PEM certificate (less likely to have private key but still)
+*.der                      # DER-encoded certificate
+*.crt                      # Certificate file
+*.keystore                 # Java keystore (contains private keys)
+*.jks                      # Java KeyStore (alternate extension)
+serviceAccountKey.json     # Google Cloud / Firebase service account key
+google-services.json       # Google Services config (contains API keys for Android)
+GoogleService-Info.plist   # Google Services config (contains API keys for iOS)
+*.tfstate                  # Terraform state — contains all resource attributes (often secrets)
+*.tfstate.*                # Terraform state backups and plan files
+.terraform/                # Terraform plugin cache and credentials
+terraform.tfvars           # Terraform variable definitions — often contains secrets
+*.tfvars                   # Any Terraform vars file — review before committing
+.vault_pass                # Ansible Vault password file
+vault_password_file        # Ansible Vault password file (alternate name)
+.htpasswd                  # Apache HTTP basic-auth password file
+.netrc                     # FTP/HTTP credentials file used by many Unix tools
+.npmrc                     # npm config — may contain auth tokens (//registry.npmjs.org/:_authToken)
+.pypirc                    # PyPI upload credentials
+*.asc                      # ASCII-armored GPG key or signed file
+id_rsa                     # SSH private key (RSA)
+id_dsa                     # SSH private key (DSA)
+id_ecdsa                   # SSH private key (ECDSA)
+id_ed25519                 # SSH private key (Ed25519)
+
+
+# =============================================================================
+# SECTION 7 — LOGS & DATABASES
+# Logs grow unboundedly and are rotated by infrastructure — not version control.
+# SQLite/local databases contain runtime state, not schema (use migrations).
+# =============================================================================
+
+*.log                      # Any log file — runtime output, not source
+logs/                      # Log directory
+*.log.*                    # Rotated log files (e.g., app.log.1, app.log.2)
+npm-debug.log              # npm debug log
+yarn-debug.log             # Yarn debug log
+yarn-error.log             # Yarn error log
+lerna-debug.log            # Lerna monorepo debug log
+pip-log.txt                # pip install log
+pip-delete-this-directory.txt  # pip cleanup marker
+*.sql.gz                   # Compressed database dump (large, not source)
+*.sqlite                   # SQLite database file — runtime state, not schema
+*.sqlite3                  # SQLite3 database file
+*.db                       # Generic database file
+*.db-shm                   # SQLite shared memory file (WAL mode)
+*.db-wal                   # SQLite write-ahead log (WAL mode)
+db.sqlite3                 # Django default SQLite database
+db.sqlite3-journal         # Django/SQLite journal file
+
+
+# =============================================================================
+# SECTION 8 — PACKAGE & DISTRIBUTION ARCHIVES
+# Built distribution files belong in a package registry (npm, PyPI, RubyGems),
+# not in source control. They're large, binary, and always regenerable.
+# =============================================================================
+
+*.tar.gz                   # Gzip-compressed tape archive (distribution tarball)
+*.tgz                      # Alternate extension for .tar.gz
+*.tar.bz2                  # Bzip2-compressed archive
+*.tar.xz                   # XZ-compressed archive
+*.zip                      # ZIP archive (build/release artifact)
+*.7z                       # 7-Zip archive
+*.rar                      # RAR archive
+*.deb                      # Debian/Ubuntu package (build artifact)
+*.rpm                      # Red Hat/Fedora package (build artifact)
+*.snap                     # Snapcraft package (build artifact)
+*.dmg                      # macOS disk image (build artifact)
+*.pkg                      # macOS / Windows package (build artifact)
+*.whl                      # Python wheel distribution package
+*.egg                      # Python egg distribution package
+
+
+# =============================================================================
+# SECTION 9 — DOCUMENTATION GENERATORS
+# Auto-generated API docs are rebuilt from source code comments by CI and
+# published to a hosting site — they don't belong in the source repo.
+# =============================================================================
+
+site/                      # MkDocs static site output
+docs/_build/               # Sphinx built documentation
+docs/api/                  # Generated API reference docs (doxygen, pdoc, etc.)
+_site/                     # Jekyll static site output (for non-GitHub-Pages repos)
+.docusaurus/               # Docusaurus cache and build
+.cache-loader/             # Docusaurus webpack cache
+javadoc/                   # Generated Javadoc HTML
+rdoc/                      # Generated Ruby RDoc output
+*.dox                      # Doxygen config backup / intermediate
+
+
+# =============================================================================
+# SECTION 10 — CLOUD, INFRASTRUCTURE & DEVOPS
+# Infrastructure-as-code tools store downloaded provider plugins and cached
+# state locally — these are large, machine-specific, and should never be shared.
+# =============================================================================
+
+# --- Terraform ---
+.terraform/                # Downloaded providers and modules — restored via `terraform init`
+.terraform.lock.hcl        # Note: COMMIT this — it pins provider versions
+*.tfstate                  # Terraform state (duplicated from secrets section for emphasis)
+*.tfstate.backup           # Terraform state backup
+crash.log                  # Terraform crash log
+crash.*.log                # Terraform crash log (versioned)
+override.tf                # Terraform local override file (not for sharing)
+override.tf.json           # Terraform local override (JSON)
+*_override.tf              # Terraform override file pattern
+*_override.tf.json         # Terraform override file pattern (JSON)
+
+# --- Ansible ---
+*.retry                    # Ansible failed-hosts retry file (created when a playbook partially fails)
+.vault_pass                # Vault password file (duplicated for emphasis)
+
+# --- Docker ---
+.docker/                   # Docker local context / config directory
+docker-compose.override.yml  # Local Docker Compose override — machine-specific service tweaks
+
+# --- Kubernetes ---
+kubeconfig                 # Kubernetes config with cluster credentials
+*.kubeconfig               # Kubernetes config variant
+
+# --- Serverless Framework ---
+.serverless/               # Serverless Framework deployment package and cache
+
+# --- AWS SAM ---
+.aws-sam/                  # AWS SAM CLI build artifacts
+
+# --- Vagrant ---
+.vagrant/                  # Vagrant VM metadata and state (machine-specific)
+
+
+# =============================================================================
+# SECTION 11 — LINTERS & FORMATTERS (CACHE FILES)
+# Linters store caches to avoid re-checking unchanged files. These caches are
+# machine-specific and should be regenerated, not shared.
+# =============================================================================
+
+.eslintcache               # ESLint lint result cache (JavaScript)
+.stylelintcache            # Stylelint result cache (CSS)
+.prettiercache             # Prettier format cache
+.ruff_cache/               # Ruff Python linter cache
+.flake8                    # flake8 config (ignore if auto-generated; commit if hand-authored)
+.rubocop-*                 # RuboCop result cache
+.golangci-lint/            # golangci-lint cache
+.scalafmt.conf.bak         # Scalafmt backup config
+
+
+# =============================================================================
+# SECTION 12 — MISC DEVELOPMENT TOOLS
+# =============================================================================
+
+# --- Jupyter Notebooks ---
+.ipynb_checkpoints/        # Jupyter auto-save checkpoints — contain stale cell outputs
+
+# --- Python Interactive ---
+profile_default/           # IPython default profile
+ipython_config.py          # IPython configuration
+
+# --- Profiling ---
+*.prof                     # Python / Go / generic profiling output
+*.pstats                   # Python cProfile stats file
+*.cpuprofile               # Node.js/V8 CPU profile
+*.heapsnapshot             # Node.js V8 heap snapshot (can be hundreds of MB)
+
+# --- Mock data / fixtures generated at runtime ---
+__mocks__/generated/       # Auto-generated mock data (not hand-authored fixtures)
+
+# --- Storybook ---
+storybook-static/          # Storybook built static site output
+
+# --- Chromatic / Percy ---
+.chromatic/                # Chromatic visual testing cache
+
+# --- Nx monorepo ---
+.nx/cache/                 # Nx computation cache
+.nx/workspace-data/        # Nx workspace analysis data
+
+# --- Turborepo ---
+.turbo/                    # Turborepo build cache
+
+# --- Rush monorepo ---
+common/deploy/             # Rush deploy staging directory
+common/temp/               # Rush temporary files
+
+# --- next.js ---
+.next/                     # Next.js build output and cache
+out/                       # Next.js static export output
+
+# --- Nuxt.js ---
+.nuxt/                     # Nuxt.js build output and cache
+.output/                   # Nuxt 3 output directory
+
+# --- Gatsby ---
+.cache/                    # Gatsby cache directory
+public/                    # Gatsby static build output (if not serving from /public)
+
+# --- SvelteKit ---
+.svelte-kit/               # SvelteKit generated types and build output
+
+# --- Remix ---
+build/                     # Remix server build output
+public/build/              # Remix client build output
+
+# --- Astro ---
+dist/                      # Astro build output
+.astro/                    # Astro cache and generated types
+
+# --- Expo (React Native) ---
+.expo/                     # Expo local state and project ID cache
+.expo-shared/              # Expo shared asset cache
+
+
+# =============================================================================
+# END OF MASTER .GITIGNORE
+# =============================================================================
+# Tips:
+#   • Run `git check-ignore -v <file>` to find which rule is ignoring a file.
+#   • Use `git rm --cached <file>` to untrack a file already committed.
+#   • Add project-specific ignores below, or in a .gitignore inside that folder.
+#   • Team-specific ignores (editor, OS) belong in ~/.gitignore_global, not here.
+# =============================================================================
