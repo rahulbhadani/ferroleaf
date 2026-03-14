@@ -221,7 +221,7 @@ impl PdfViewer {
     }
 }
 
-// ── PDF rendering via pdftoppm ────────────────────────────────────────────────
+//  PDF rendering via pdftoppm 
 //
 // pdftoppm ships with poppler-utils which comes with every texlive installation.
 // We render all pages to PNG in a temp dir, then read the PNG bytes back.

@@ -21,7 +21,7 @@ use crate::project::{Project, ProjectSettings};
 use crate::synctex;
 use crate::theme::Palette;
 
-// ── Menu & context-menu types ─────────────────────────────────────────────────
+//  Menu & context-menu types 
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MenuKind { File, Edit, Build, View, Help }
@@ -38,7 +38,7 @@ pub struct ContextMenuState {
     pub page_h: f32,
 }
 
-// ── Messages ──────────────────────────────────────────────────────────────────
+//  Messages 
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -49,6 +49,9 @@ pub enum Message {
     NewFile, NewFileNameChanged(String), NewFileConfirmed, NewFileCancelled,
     SetMainFile(PathBuf), DeleteFile(PathBuf),
     EditorAction(text_editor::Action),
+    /// Mouse wheel scrolled — used to keep the line-number gutter in sync
+    /// with the text_editor's internal scroll position.
+    EditorWheelScrolled(mouse::ScrollDelta),
     SaveFile, SaveAll, SearchChanged(String),
     Compile,
     CompileStatusUpdate(Arc<CompileStatus>),
@@ -63,16 +66,16 @@ pub enum Message {
     ToggleSidebar, ToggleLogPanel, ShowSettings, CloseSettings,
     KeyPressed(keyboard::Key, keyboard::Modifiers),
     WindowResized(f32, f32),
-    // ── Menu bar & context menu ───────────────────────────────────────────────
+    //  Menu bar & context menu 
     ToggleMenu(MenuKind),
     Dismiss,
     RightClicked,
     SynctexAt { page: usize, x: f32, y: f32, page_w: f32, page_h: f32 },
-    // ── Editor actions ────────────────────────────────────────────────────────
+    //  Editor actions 
     CommentLine,
     SelectAll,
     CloseActiveTab,
-    // ── App control ───────────────────────────────────────────────────────────
+    //  App control 
     Quit,
     About,
     ShowKeyboardShortcuts,
@@ -89,7 +92,7 @@ pub enum Modal { None, NewFile { name: String }, Settings, WelcomeScreen }
 #[derive(Clone, Debug)]
 pub enum StatusKind { Info, Success, Error, Warning }
 
-// ── State ─────────────────────────────────────────────────────────────────────
+//  State 
 
 pub struct Ferroleaf {
     project: Option<Project>,
@@ -120,8 +123,10 @@ pub struct Ferroleaf {
     /// Guard against opening a second native dialog while one is already open.
     dialog_open: bool,
     /// When true, the next PdfPagesRendered will auto-fit zoom and clear this flag.
-    /// Set only when a brand-new PDF arrives from a compile, never on zoom rerenders.
     pdf_fit_on_next_render: bool,
+    /// Accumulated vertical scroll of the editor pane (pixels from top).
+    /// Updated from WheelScrolled events and used to sync the line-number gutter.
+    editor_scroll_y: f32,
 }
 
 impl Ferroleaf {
@@ -145,6 +150,7 @@ impl Ferroleaf {
             window_width: 1440.0, window_height: 900.0,
             dialog_open: false,
             pdf_fit_on_next_render: false,
+            editor_scroll_y: 0.0,
         };
         // Query the actual window size immediately so zoom-fit works correctly
         // even if the window is rendered at a different size than the default.
@@ -154,7 +160,7 @@ impl Ferroleaf {
         (state, size_task)
     }
 
-    // ── Update ────────────────────────────────────────────────────────────────
+    //  Update 
     pub fn update(&mut self, msg: Message) -> Task<Message> {
         match msg {
             // Use native Linux dialog tools (zenity / kdialog / yad / python3-gi).
@@ -230,6 +236,11 @@ impl Ferroleaf {
             }
             Message::SwitchTab(path) => {
                 if let Some(p) = &mut self.project { p.active_file = Some(path); }
+                self.editor_scroll_y = 0.0;
+                return scrollable::scroll_to(
+                    crate::editor::gutter_scroll_id(),
+                    scrollable::AbsoluteOffset { x: 0.0, y: 0.0 },
+                );
             }
             Message::ToggleFileTreeDir(path) => { self.file_tree.toggle_dir(&path); }
             Message::NewFile => { self.modal = Modal::NewFile { name: String::new() }; }
@@ -296,6 +307,27 @@ impl Ferroleaf {
                             if is_edit { let t = state.text(); project.update_content(&active, t); }
                         }
                     }
+                }
+            }
+            Message::EditorWheelScrolled(delta) => {
+                // Only sync gutter when the mouse is inside the editor pane.
+                let (mx, _my) = self.mouse_pos;
+                let sidebar_w  = if self.sidebar_visible { 220.0_f32 } else { 0.0 };
+                let editor_end = sidebar_w
+                    + (self.window_width - sidebar_w) * self.split_ratio;
+                if mx >= sidebar_w && mx <= editor_end {
+                    // Convert the wheel delta to pixels using the same line height
+                    // the gutter uses (font_size * 1.3), with 3 lines per tick.
+                    let line_h = self.font_size as f32 * 1.3;
+                    let dy = match delta {
+                        mouse::ScrollDelta::Lines { y, .. } => -y * 3.0 * line_h,
+                        mouse::ScrollDelta::Pixels { y, .. } => -y,
+                    };
+                    self.editor_scroll_y = (self.editor_scroll_y + dy).max(0.0);
+                    return scrollable::scroll_to(
+                        crate::editor::gutter_scroll_id(),
+                        scrollable::AbsoluteOffset { x: 0.0, y: self.editor_scroll_y },
+                    );
                 }
             }
             Message::SaveFile => {
@@ -532,7 +564,7 @@ impl Ferroleaf {
                     }
                 }
             }
-            // ── Menu bar ─────────────────────────────────────────────────────
+            //  Menu bar 
             Message::ToggleMenu(kind) => {
                 if self.open_menu.as_ref() == Some(&kind) {
                     self.open_menu = None;
@@ -546,7 +578,7 @@ impl Ferroleaf {
                 self.context_menu = None;
             }
 
-            // ── Right-click context menu ──────────────────────────────────────
+            //  Right-click context menu 
             Message::RightClicked => {
                 let (mx, my) = self.mouse_pos;
                 // Compute the pixel X where the editor panel ends.
@@ -575,7 +607,7 @@ impl Ferroleaf {
                 self.open_menu = None;
             }
 
-            // ── SyncTeX triggered from context menu (uses saved click coords) ─
+            //  SyncTeX triggered from context menu (uses saved click coords) 
             Message::SynctexAt { page, x, y, page_w, page_h } => {
                 if let Some(project) = &self.project {
                     if let Some(target) = project.compile_target() {
@@ -593,7 +625,7 @@ impl Ferroleaf {
                 }
             }
 
-            // ── Editor helpers ────────────────────────────────────────────────
+            //  Editor helpers 
             Message::CommentLine => {
                 let active_path = self.project.as_ref()
                     .and_then(|p| p.active_file.clone());
@@ -639,7 +671,7 @@ impl Ferroleaf {
                 }
             }
 
-            // ── App control ───────────────────────────────────────────────────
+            //  App control 
             Message::Quit => { std::process::exit(0); }
             Message::About => {
                 self.set_status(
@@ -655,7 +687,7 @@ impl Ferroleaf {
         Task::none()
     }
 
-    // ── View ──────────────────────────────────────────────────────────────────
+    //  View 
     pub fn view(&self) -> Element<Message> {
         let root: Element<Message> = container(
             column![
@@ -699,6 +731,8 @@ impl Ferroleaf {
                 Some(Message::MouseMoved(position.x, position.y)),
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) =>
                 Some(Message::RightClicked),
+            Event::Mouse(mouse::Event::WheelScrolled { delta }) =>
+                Some(Message::EditorWheelScrolled(delta)),
             Event::Window(iced::window::Event::Resized(size)) =>
                 Some(Message::WindowResized(size.width, size.height)),
             _ => None,
@@ -707,7 +741,7 @@ impl Ferroleaf {
 
     pub fn theme(&self) -> Theme { Theme::Dark }
 
-    // ── View helpers ──────────────────────────────────────────────────────────
+    //  View helpers 
 
     fn view_toolbar(&self) -> Element<Message> {
         let compiling = self.compile_status.is_running();
@@ -811,7 +845,7 @@ impl Ferroleaf {
             if let Some(state) = self.editor_states.get(active) {
                 let lc = state.text().lines().count();
                 container(row![
-                    crate::editor::line_gutter(lc, 0.0, 800.0),
+                    crate::editor::line_gutter(lc, font_size),
                     container(
                         text_editor(&state.content)
                             .on_action(Message::EditorAction)
@@ -836,7 +870,7 @@ impl Ferroleaf {
 
     fn view_pdf(&self) -> Element<Message> { self.pdf_viewer.view() }
 
-    // ── Menu bar ──────────────────────────────────────────────────────────────
+    //  Menu bar 
 
     fn view_menu_bar(&self) -> Element<Message> {
         let mk = |label: &'static str, kind: MenuKind| -> Element<'static, Message> {
@@ -1195,7 +1229,7 @@ impl Ferroleaf {
 
 }
 
-// ── Free widget helpers ───────────────────────────────────────────────────────
+//  Free widget helpers 
 
 fn ib(icon: &'static str, msg: Message) -> Element<'static, Message> {
     button(text(icon).size(18u16))

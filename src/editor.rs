@@ -1,5 +1,5 @@
 use iced::{
-    widget::{button, column, container, row, text, text_editor, Space},
+    widget::{button, column, container, row, scrollable, text, text_editor, Space},
     Alignment, Element, Font, Length,
 };
 use std::path::PathBuf;
@@ -57,7 +57,7 @@ pub fn tokenize_latex(src: &str) -> Vec<(usize, usize, TokenKind)> {
     tokens
 }
 
-// ─── Per-line tokenizer used by the Highlighter trait ────────────────────────
+//  Per-line tokenizer used by the Highlighter trait 
 
 fn tokenize_line_hl(
     line: &str,
@@ -155,7 +155,7 @@ fn tokenize_line_hl(
     tokens
 }
 
-// ─── Highlighter settings & implementation ───────────────────────────────────
+//  Highlighter settings & implementation 
 
 /// Unit settings — no configuration needed for LaTeX highlighting.
 #[derive(Debug, Clone, PartialEq)]
@@ -213,7 +213,7 @@ pub fn latex_highlight_format(
     Format { color, font: None }
 }
 
-// ─── Editor state ─────────────────────────────────────────────────────────────
+//  Editor state 
 
 //  Editor state 
 
@@ -305,21 +305,39 @@ pub fn tab_bar<'a>(
 
 //  Line number gutter 
 
-pub fn line_gutter(line_count: usize, _scroll_offset: f32, _viewport_height: f32) -> Element<'static, Message> {
+/// Stable scrollable ID so app.rs can call scrollable::scroll_to to keep the
+/// gutter in sync with the text_editor's internal scroll position.
+pub fn gutter_scroll_id() -> scrollable::Id {
+    scrollable::Id::new("line_gutter_scroll")
+}
+
+pub fn line_gutter(line_count: usize, font_size: u16) -> Element<'static, Message> {
+    // iced uses LineHeight::Relative(1.3) by default.  Each number row must be
+    // exactly this height so the gutter aligns with text_editor rows.
+    let line_h = (font_size as f32 * 1.3).round();
+
     let numbers: Vec<Element<Message>> = (1..=(line_count.max(1)))
         .map(|n| {
-            text(format!("{:>4}", n))
-                .size(12)
-                .font(Font::MONOSPACE)
-                .color(Palette::TEXT_DIM)
-                .into()
+            container(
+                text(format!("{:>4}", n))
+                    .size(font_size.saturating_sub(2))
+                    .font(Font::MONOSPACE)
+                    .color(Palette::TEXT_DIM)
+            )
+            .width(Length::Fill)
+            .height(Length::Fixed(line_h))
+            .into()
         })
         .collect();
 
-    container(column(numbers).spacing(2))
-        .width(48)
-        // Use [u16; 2] padding — top/bottom, left/right
-        .padding([4u16, 4u16])
-        .style(crate::theme::editor_pane)
-        .into()
+    scrollable(
+        container(column(numbers).spacing(0))
+            .width(Length::Fill)
+            .padding([4u16, 4u16])
+    )
+    .id(gutter_scroll_id())
+    .width(48)
+    .height(Length::Fill)
+    .style(crate::theme::gutter_scroll)
+    .into()
 }
