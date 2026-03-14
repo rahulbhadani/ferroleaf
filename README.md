@@ -12,7 +12,7 @@ No Electron. No browser. No subscription. All features, always.
 |---|---|
 | **Native Iced UI** | Pure Rust, GPU-accelerated via wgpu -- no Electron, no web runtime |
 | **Pink-brown dark theme** | Custom warm palette: deep browns, rose pinks, high-contrast text |
-| **PDF preview** | Side-by-side live PDF rendered via pdfium |
+| **PDF preview** | Side-by-side live PDF rendered |
 | **SyncTeX (PDF→source)** | Click any text in the PDF -- cursor jumps to the matching `.tex` line |
 | **Multi-file projects** | Full project workspace, compiles the **main file** regardless of which tab is open |
 | **Intermediate file filtering** | `.aux`, `.log`, `.synctex.gz`, `.bbl` etc. are **never shown** in the file tree |
@@ -70,22 +70,6 @@ sudo dnf install -y \
     libX11-devel vulkan-loader-devel \
     jetbrains-mono-fonts \
     texlive-scheme-full
-```
-
-### pdfium (for PDF rendering)
-The `install.sh` script downloads this automatically. If you prefer manual setup:
-
-```bash
-# Download from https://github.com/bblanchon/pdfium-binaries/releases
-# Place libpdfium.so next to the ferroleaf binary
-export PDFIUM_DYNAMIC_LIB_PATH=/path/to/pdfium/lib
-```
-
-Alternatively, pdfium is often available via system package managers:
-```bash
-# Ubuntu (unofficial PPA)
-sudo add-apt-repository ppa:saiarcot895/chromium-dev
-sudo apt-get install libpdfium-dev
 ```
 
 ---
