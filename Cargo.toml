@@ -3,7 +3,7 @@ name = "ferroleaf"
 version = "0.1.0"
 edition = "2021"
 description = "A native Linux LaTeX editor inspired by Overleaf, built with Rust and Iced"
-authors = "Rahul Bhadani"
+authors = ["Rahul Bhadani"]
 
 [[bin]]
 name = "ferroleaf"
