@@ -21,7 +21,7 @@ use crate::project::{Project, ProjectSettings};
 use crate::synctex;
 use crate::theme::Palette;
 
-// ── Menu & context-menu types ─────────────────────────────────────────────────
+//  Menu & context-menu types 
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MenuKind { File, Edit, Build, View, Help }
@@ -38,7 +38,7 @@ pub struct ContextMenuState {
     pub page_h: f32,
 }
 
-// ── Messages ──────────────────────────────────────────────────────────────────
+//  Messages 
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -63,16 +63,16 @@ pub enum Message {
     ToggleSidebar, ToggleLogPanel, ShowSettings, CloseSettings,
     KeyPressed(keyboard::Key, keyboard::Modifiers),
     WindowResized(f32, f32),
-    // ── Menu bar & context menu ───────────────────────────────────────────────
+    //  Menu bar & context menu 
     ToggleMenu(MenuKind),
     Dismiss,
     RightClicked,
     SynctexAt { page: usize, x: f32, y: f32, page_w: f32, page_h: f32 },
-    // ── Editor actions ────────────────────────────────────────────────────────
+    //  Editor actions 
     CommentLine,
     SelectAll,
     CloseActiveTab,
-    // ── App control ───────────────────────────────────────────────────────────
+    //  App control 
     Quit,
     About,
     ShowKeyboardShortcuts,
@@ -89,7 +89,7 @@ pub enum Modal { None, NewFile { name: String }, Settings, WelcomeScreen }
 #[derive(Clone, Debug)]
 pub enum StatusKind { Info, Success, Error, Warning }
 
-// ── State ─────────────────────────────────────────────────────────────────────
+//  State 
 
 pub struct Ferroleaf {
     project: Option<Project>,
@@ -154,7 +154,7 @@ impl Ferroleaf {
         (state, size_task)
     }
 
-    // ── Update ────────────────────────────────────────────────────────────────
+    //  Update 
     pub fn update(&mut self, msg: Message) -> Task<Message> {
         match msg {
             // Use native Linux dialog tools (zenity / kdialog / yad / python3-gi).
@@ -543,7 +543,7 @@ impl Ferroleaf {
                     }
                 }
             }
-            // ── Menu bar ─────────────────────────────────────────────────────
+            //  Menu bar 
             Message::ToggleMenu(kind) => {
                 if self.open_menu.as_ref() == Some(&kind) {
                     self.open_menu = None;
@@ -557,7 +557,7 @@ impl Ferroleaf {
                 self.context_menu = None;
             }
 
-            // ── Right-click context menu ──────────────────────────────────────
+            //  Right-click context menu 
             Message::RightClicked => {
                 let (mx, my) = self.mouse_pos;
                 // Compute the pixel X where the editor panel ends.
@@ -586,7 +586,7 @@ impl Ferroleaf {
                 self.open_menu = None;
             }
 
-            // ── SyncTeX triggered from context menu (uses saved click coords) ─
+            //  SyncTeX triggered from context menu (uses saved click coords) 
             Message::SynctexAt { page, x, y, page_w, page_h } => {
                 if let Some(project) = &self.project {
                     if let Some(target) = project.compile_target() {
@@ -604,7 +604,7 @@ impl Ferroleaf {
                 }
             }
 
-            // ── Editor helpers ────────────────────────────────────────────────
+            //  Editor helpers 
             Message::CommentLine => {
                 let active_path = self.project.as_ref()
                     .and_then(|p| p.active_file.clone());
@@ -650,7 +650,7 @@ impl Ferroleaf {
                 }
             }
 
-            // ── App control ───────────────────────────────────────────────────
+            //  App control 
             Message::Quit => { std::process::exit(0); }
             Message::About => {
                 self.set_status(
@@ -666,7 +666,7 @@ impl Ferroleaf {
         Task::none()
     }
 
-    // ── View ──────────────────────────────────────────────────────────────────
+    //  View 
     pub fn view(&self) -> Element<Message> {
         let root: Element<Message> = container(
             column![
@@ -718,7 +718,7 @@ impl Ferroleaf {
 
     pub fn theme(&self) -> Theme { Theme::Dark }
 
-    // ── View helpers ──────────────────────────────────────────────────────────
+    //  View helpers 
 
     fn view_toolbar(&self) -> Element<Message> {
         let compiling = self.compile_status.is_running();
@@ -847,7 +847,7 @@ impl Ferroleaf {
 
     fn view_pdf(&self) -> Element<Message> { self.pdf_viewer.view() }
 
-    // ── Menu bar ──────────────────────────────────────────────────────────────
+    //  Menu bar 
 
     fn view_menu_bar(&self) -> Element<Message> {
         let mk = |label: &'static str, kind: MenuKind| -> Element<'static, Message> {
@@ -1224,7 +1224,7 @@ impl Ferroleaf {
     }
 }
 
-// ── Free widget helpers ───────────────────────────────────────────────────────
+//  Free widget helpers 
 
 fn ib(icon: &'static str, msg: Message) -> Element<'static, Message> {
     button(text(icon).size(18u16))

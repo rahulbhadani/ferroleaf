@@ -57,7 +57,7 @@ pub fn tokenize_latex(src: &str) -> Vec<(usize, usize, TokenKind)> {
     tokens
 }
 
-// ─── Per-line tokenizer used by the Highlighter trait ────────────────────────
+//  Per-line tokenizer used by the Highlighter trait 
 
 fn tokenize_line_hl(
     line: &str,
@@ -155,7 +155,7 @@ fn tokenize_line_hl(
     tokens
 }
 
-// ─── Highlighter settings & implementation ───────────────────────────────────
+//  Highlighter settings & implementation 
 
 /// Unit settings — no configuration needed for LaTeX highlighting.
 #[derive(Debug, Clone, PartialEq)]
@@ -213,7 +213,7 @@ pub fn latex_highlight_format(
     Format { color, font: None }
 }
 
-// ─── Editor state ─────────────────────────────────────────────────────────────
+//  Editor state 
 
 //  Editor state 
 
