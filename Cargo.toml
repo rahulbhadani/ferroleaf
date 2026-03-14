@@ -1,0 +1,54 @@
+[package]
+name = "ferroleaf"
+version = "0.1.0"
+edition = "2021"
+description = "A native Linux LaTeX editor inspired by Overleaf, built with Rust and Iced"
+authors = ["Ferroleaf Contributors"]
+
+[[bin]]
+name = "ferroleaf"
+path = "src/main.rs"
+
+[dependencies]
+# UI framework — pure Rust, GPU-accelerated, no Electron
+iced = { version = "0.13", features = [
+    "advanced",
+    "image",
+    "svg",
+    "tokio",
+] }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Serialization for project settings
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# File system utilities
+walkdir = "2"
+
+# Regex for log parsing and synctex
+regex = "1"
+
+# PDF rendering via pdfium (dynamic linking — requires libpdfium.so at runtime)
+
+# gzip decompression for .synctex.gz
+flate2 = "1"
+
+# Native file dialogs (open folder, save as)
+
+
+# Error handling
+tempfile = "3"
+anyhow = "1"
+
+# Logging
+log = "0.4"
+env_logger = "0.11"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
