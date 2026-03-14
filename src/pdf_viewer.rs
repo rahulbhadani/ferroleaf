@@ -12,6 +12,11 @@ use iced::{
 use crate::app::Message;
 use crate::theme::Palette;
 
+/// Stable ID for the PDF scrollable so we can programmatically scroll to a page.
+pub fn pdf_scroll_id() -> scrollable::Id {
+    scrollable::Id::new("pdf_viewer_scroll")
+}
+
 #[derive(Debug, Default)]
 pub struct PdfViewer {
     pub pdf_path: Option<PathBuf>,
@@ -60,6 +65,18 @@ impl PdfViewer {
     }
     pub fn prev_page(&mut self) {
         if self.current_page > 0 { self.current_page -= 1; }
+    }
+
+    /// Compute the absolute Y scroll offset (pixels) to bring `page_idx` into view.
+    /// Each page is rendered at `page.height * zoom` pixels, with 12px spacing and
+    /// 16px top padding inside the scrollable.
+    pub fn scroll_offset_for_page(&self, page_idx: usize) -> f32 {
+        let mut y = 16.0_f32; // top padding
+        for (i, page) in self.rendered_pages.iter().enumerate() {
+            if i == page_idx { break; }
+            y += page.height as f32 * self.zoom + 12.0; // page height + spacing
+        }
+        y
     }
 
     pub fn view(&self) -> Element<'_, Message> {
@@ -135,18 +152,21 @@ impl PdfViewer {
             .into();
         }
 
-        // Show only the current page (lazy rendering — other pages are re-rendered
-        // on demand when navigating, so there is no need to keep all in the DOM).
-        let page = &self.rendered_pages[self.current_page.min(self.rendered_pages.len() - 1)];
+        // Render all pages in a continuous scrollable column.
+        // The scrollable has a stable ID so Next/Prev can snap to the right page.
+        let pages: Vec<Element<Message>> = self.rendered_pages.iter()
+            .map(|page| self.render_page(page))
+            .collect();
 
         scrollable(
-            container(self.render_page(page))
+            container(column(pages).spacing(12).align_x(Alignment::Center))
                 .width(Length::Fill)
-                .center_x(Length::Fill)
                 .padding(16u16)
         )
-        .width(Length::Fill).height(Length::Fill)
-        .style(crate::theme::dark_scroll)
+        .id(pdf_scroll_id())
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(crate::theme::pdf_scroll)
         .into()
     }
 
@@ -201,7 +221,7 @@ impl PdfViewer {
     }
 }
 
-//  PDF rendering via pdftoppm 
+// ── PDF rendering via pdftoppm ────────────────────────────────────────────────
 //
 // pdftoppm ships with poppler-utils which comes with every texlive installation.
 // We render all pages to PNG in a temp dir, then read the PNG bytes back.

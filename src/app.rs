@@ -21,7 +21,7 @@ use crate::project::{Project, ProjectSettings};
 use crate::synctex;
 use crate::theme::Palette;
 
-//  Menu & context-menu types 
+// ── Menu & context-menu types ─────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MenuKind { File, Edit, Build, View, Help }
@@ -38,7 +38,7 @@ pub struct ContextMenuState {
     pub page_h: f32,
 }
 
-//  Messages 
+// ── Messages ──────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -63,16 +63,16 @@ pub enum Message {
     ToggleSidebar, ToggleLogPanel, ShowSettings, CloseSettings,
     KeyPressed(keyboard::Key, keyboard::Modifiers),
     WindowResized(f32, f32),
-    //  Menu bar & context menu 
+    // ── Menu bar & context menu ───────────────────────────────────────────────
     ToggleMenu(MenuKind),
     Dismiss,
     RightClicked,
     SynctexAt { page: usize, x: f32, y: f32, page_w: f32, page_h: f32 },
-    //  Editor actions 
+    // ── Editor actions ────────────────────────────────────────────────────────
     CommentLine,
     SelectAll,
     CloseActiveTab,
-    //  App control 
+    // ── App control ───────────────────────────────────────────────────────────
     Quit,
     About,
     ShowKeyboardShortcuts,
@@ -89,7 +89,7 @@ pub enum Modal { None, NewFile { name: String }, Settings, WelcomeScreen }
 #[derive(Clone, Debug)]
 pub enum StatusKind { Info, Success, Error, Warning }
 
-//  State 
+// ── State ─────────────────────────────────────────────────────────────────────
 
 pub struct Ferroleaf {
     project: Option<Project>,
@@ -154,7 +154,7 @@ impl Ferroleaf {
         (state, size_task)
     }
 
-    //  Update 
+    // ── Update ────────────────────────────────────────────────────────────────
     pub fn update(&mut self, msg: Message) -> Task<Message> {
         match msg {
             // Use native Linux dialog tools (zenity / kdialog / yad / python3-gi).
@@ -357,7 +357,7 @@ impl Ferroleaf {
                         self.compile_log = r.raw_log.clone();
                         let ne = r.errors().len(); let nw = r.warnings().len();
                         if let Some(pdf_path) = &r.pdf_path {
-                            let path = pdf_path.clone(); let zoom = self.pdf_viewer.zoom;
+                            let path = pdf_path.clone();
                             self.compile_status = CompileStatus::Success(r.clone());
                             self.set_status(
                                 format!("Done in {:.1}s : {} err, {} warn", r.duration.as_secs_f32(), ne, nw),
@@ -393,47 +393,28 @@ impl Ferroleaf {
             Message::ClearLog => self.compile_log.clear(),
 
             Message::PdfPagesRendered(pages) => {
-                if pages.len() == 1
-                    && !self.pdf_viewer.rendered_pages.is_empty()
-                    && !self.pdf_fit_on_next_render
-                {
-                    // Single-page render (zoom or navigate) — patch slot in-place.
-                    let p = pages.into_iter().next().unwrap();
-                    let idx = p.page_number;
-                    if idx < self.pdf_viewer.rendered_pages.len() {
-                        self.pdf_viewer.rendered_pages[idx] = p;
+                // Always a full render now (all pages). Store and optionally auto-fit.
+                self.pdf_viewer.total_pages = pages.len();
+                // Capture unscaled page width once, from the initial zoom=1.0 render.
+                if self.pdf_fit_on_next_render {
+                    if let Some(first) = pages.first() {
+                        self.pdf_viewer.base_page_width = Some(first.width);
                     }
-                    // Also make sure current_page is pointing at the right slot
-                    // (next_page/prev_page already updated current_page before we got here).
-                } else {
-                    // Full render (initial load at zoom=1.0, or fit rerender).
-                    self.pdf_viewer.total_pages = pages.len();
-                    // Capture the unscaled page width from this render before storing.
-                    // Only update base_page_width when we are rendering at zoom=1.0
-                    // (the very first render after load_pdf), so it stays stable forever.
-                    if self.pdf_fit_on_next_render {
-                        if let Some(first) = pages.first() {
-                            // zoom is currently 1.0 (set in CompileStatusUpdate)
-                            self.pdf_viewer.base_page_width = Some(first.width);
-                        }
-                    }
-                    self.pdf_viewer.rendered_pages = pages;
+                }
+                self.pdf_viewer.rendered_pages = pages;
 
-                    if self.pdf_fit_on_next_render {
-                        self.pdf_fit_on_next_render = false;
-                        let sidebar_w   = if self.sidebar_visible { 220.0_f32 } else { 0.0 };
-                        let pdf_panel_w = (self.window_width - sidebar_w)
-                            * (1.0 - self.split_ratio)
-                            - 48.0;
-                        let base_page_w = self.pdf_viewer.base_page_width
-                            .map(|w| w as f32)
-                            .unwrap_or(794.0);
-                        if base_page_w > 0.0 && pdf_panel_w > 0.0 {
-                            let fit_zoom = (pdf_panel_w / base_page_w).clamp(0.25, 4.0);
-                            self.pdf_viewer.set_zoom(fit_zoom);
-                            // Re-render at fit zoom — flag is now false so no loop.
-                            return self.rerender_pdf();
-                        }
+                if self.pdf_fit_on_next_render {
+                    self.pdf_fit_on_next_render = false;
+                    let sidebar_w   = if self.sidebar_visible { 220.0_f32 } else { 0.0 };
+                    let pdf_panel_w = (self.window_width - sidebar_w)
+                        * (1.0 - self.split_ratio) - 48.0;
+                    let base_page_w = self.pdf_viewer.base_page_width
+                        .map(|w| w as f32).unwrap_or(794.0);
+                    if base_page_w > 0.0 && pdf_panel_w > 0.0 {
+                        let fit_zoom = (pdf_panel_w / base_page_w).clamp(0.25, 4.0);
+                        self.pdf_viewer.set_zoom(fit_zoom);
+                        // Re-render at fit zoom. Flag is false so no loop.
+                        return self.rerender_pdf();
                     }
                 }
             }
@@ -459,14 +440,22 @@ impl Ferroleaf {
             }
             Message::PdfNextPage => {
                 self.pdf_viewer.next_page();
-                return self.rerender_current_page();
+                let offset = self.pdf_viewer.scroll_offset_for_page(self.pdf_viewer.current_page);
+                return scrollable::scroll_to(
+                    crate::pdf_viewer::pdf_scroll_id(),
+                    scrollable::AbsoluteOffset { x: 0.0, y: offset },
+                );
             }
             Message::PdfPrevPage => {
                 self.pdf_viewer.prev_page();
-                return self.rerender_current_page();
+                let offset = self.pdf_viewer.scroll_offset_for_page(self.pdf_viewer.current_page);
+                return scrollable::scroll_to(
+                    crate::pdf_viewer::pdf_scroll_id(),
+                    scrollable::AbsoluteOffset { x: 0.0, y: offset },
+                );
             }
-            Message::PdfZoomIn   => { self.pdf_viewer.zoom_in();  return self.rerender_current_page(); }
-            Message::PdfZoomOut  => { self.pdf_viewer.zoom_out(); return self.rerender_current_page(); }
+            Message::PdfZoomIn  => { self.pdf_viewer.zoom_in();  return self.rerender_pdf(); }
+            Message::PdfZoomOut => { self.pdf_viewer.zoom_out(); return self.rerender_pdf(); }
             Message::PdfZoomFit  => {
                 let sidebar_w   = if self.sidebar_visible { 220.0_f32 } else { 0.0 };
                 let pdf_panel_w = (self.window_width - sidebar_w)
@@ -543,7 +532,7 @@ impl Ferroleaf {
                     }
                 }
             }
-            //  Menu bar 
+            // ── Menu bar ─────────────────────────────────────────────────────
             Message::ToggleMenu(kind) => {
                 if self.open_menu.as_ref() == Some(&kind) {
                     self.open_menu = None;
@@ -557,7 +546,7 @@ impl Ferroleaf {
                 self.context_menu = None;
             }
 
-            //  Right-click context menu 
+            // ── Right-click context menu ──────────────────────────────────────
             Message::RightClicked => {
                 let (mx, my) = self.mouse_pos;
                 // Compute the pixel X where the editor panel ends.
@@ -586,7 +575,7 @@ impl Ferroleaf {
                 self.open_menu = None;
             }
 
-            //  SyncTeX triggered from context menu (uses saved click coords) 
+            // ── SyncTeX triggered from context menu (uses saved click coords) ─
             Message::SynctexAt { page, x, y, page_w, page_h } => {
                 if let Some(project) = &self.project {
                     if let Some(target) = project.compile_target() {
@@ -604,7 +593,7 @@ impl Ferroleaf {
                 }
             }
 
-            //  Editor helpers 
+            // ── Editor helpers ────────────────────────────────────────────────
             Message::CommentLine => {
                 let active_path = self.project.as_ref()
                     .and_then(|p| p.active_file.clone());
@@ -650,7 +639,7 @@ impl Ferroleaf {
                 }
             }
 
-            //  App control 
+            // ── App control ───────────────────────────────────────────────────
             Message::Quit => { std::process::exit(0); }
             Message::About => {
                 self.set_status(
@@ -666,7 +655,7 @@ impl Ferroleaf {
         Task::none()
     }
 
-    //  View 
+    // ── View ──────────────────────────────────────────────────────────────────
     pub fn view(&self) -> Element<Message> {
         let root: Element<Message> = container(
             column![
@@ -718,7 +707,7 @@ impl Ferroleaf {
 
     pub fn theme(&self) -> Theme { Theme::Dark }
 
-    //  View helpers 
+    // ── View helpers ──────────────────────────────────────────────────────────
 
     fn view_toolbar(&self) -> Element<Message> {
         let compiling = self.compile_status.is_running();
@@ -847,7 +836,7 @@ impl Ferroleaf {
 
     fn view_pdf(&self) -> Element<Message> { self.pdf_viewer.view() }
 
-    //  Menu bar 
+    // ── Menu bar ──────────────────────────────────────────────────────────────
 
     fn view_menu_bar(&self) -> Element<Message> {
         let mk = |label: &'static str, kind: MenuKind| -> Element<'static, Message> {
@@ -1191,7 +1180,7 @@ impl Ferroleaf {
         self.status_message = Some((msg, kind));
     }
 
-    /// Re-render all pages at the current zoom (used after fit / initial load).
+    /// Re-render all pages at the current zoom.
     fn rerender_pdf(&self) -> Task<Message> {
         if let Some(path) = &self.pdf_viewer.pdf_path {
             let path = path.clone(); let zoom = self.pdf_viewer.zoom;
@@ -1204,27 +1193,9 @@ impl Ferroleaf {
         } else { Task::none() }
     }
 
-    /// Re-render only the current visible page (used for zoom in/out — fast).
-    /// Immediately replaces the current page's handle; other pages stay at old zoom
-    /// until the user navigates to them (lazy rendering).
-    fn rerender_current_page(&self) -> Task<Message> {
-        if let Some(path) = &self.pdf_viewer.pdf_path {
-            let path  = path.clone();
-            let zoom  = self.pdf_viewer.zoom;
-            // pdftoppm uses 1-based page numbers
-            let page1 = (self.pdf_viewer.current_page as u32) + 1;
-            Task::perform(
-                async move {
-                    crate::pdf_viewer::render_pdf_page_range(&path, zoom, Some((page1, page1)))
-                        .await.unwrap_or_default()
-                },
-                Message::PdfPagesRendered,
-            )
-        } else { Task::none() }
-    }
 }
 
-//  Free widget helpers 
+// ── Free widget helpers ───────────────────────────────────────────────────────
 
 fn ib(icon: &'static str, msg: Message) -> Element<'static, Message> {
     button(text(icon).size(18u16))

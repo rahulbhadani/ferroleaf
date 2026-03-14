@@ -127,6 +127,39 @@ pub fn pdf_pane(_t: &Theme) -> container::Style {
     }
 }
 
+/// Background color of the PDF scroll area (slightly lighter than the editor).
+pub const PDF_SCROLL_BG: Color = Color { r: 0.19, g: 0.14, b: 0.14, a: 1.0 };
+
+pub fn pdf_scroll(_t: &Theme, status: scrollable::Status) -> scrollable::Style {
+    let (thumb, rail_bg) = match status {
+        scrollable::Status::Hovered { .. } | scrollable::Status::Dragged { .. } =>
+            (Palette::PINK_MID,  Color { r: 0.30, g: 0.20, b: 0.20, a: 1.0 }),
+        _ =>
+            (Color { r: 0.50, g: 0.35, b: 0.32, a: 1.0 },
+             Color { r: 0.24, g: 0.16, b: 0.16, a: 1.0 }),
+    };
+    scrollable::Style {
+        container: container_bg(PDF_SCROLL_BG),
+        vertical_rail: scrollable::Rail {
+            background: Some(Background::Color(rail_bg)),
+            border: Border { radius: 4.0.into(), ..Default::default() },
+            scroller: scrollable::Scroller {
+                color: thumb,
+                border: Border { radius: 4.0.into(), ..Default::default() },
+            },
+        },
+        horizontal_rail: scrollable::Rail {
+            background: Some(Background::Color(rail_bg)),
+            border: Border { radius: 4.0.into(), ..Default::default() },
+            scroller: scrollable::Scroller {
+                color: thumb,
+                border: Border { radius: 4.0.into(), ..Default::default() },
+            },
+        },
+        gap: Some(Background::Color(rail_bg)),
+    }
+}
+
 pub fn card(_t: &Theme) -> container::Style {
     container::Style {
         background: Some(Background::Color(Palette::BG_MID)),
