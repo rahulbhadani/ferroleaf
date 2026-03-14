@@ -228,7 +228,7 @@ Run `install.sh` which downloads JetBrains Mono automatically, or manually place
 
 ## License
 
-MIT License -- use freely, modify freely, no strings attached.
+MIT License.
 
 Permission is hereby granted, without written agreement and without license or royalty fees, to use, copy, modify, and distribute this software and its documentation for any purpose, provided that the above copyright notice and the following two paragraphs appear in all copies of this software.
 
