@@ -13,6 +13,8 @@ const HIDDEN_EXT: &[&str] = &[
 pub struct Project {
     pub root: PathBuf,
     pub name: String,
+    /// Explicitly pinned main file (set by user via ★ or saved in .ferroleaf.json).
+    /// When None, compile_target() returns the active .tex tab instead.
     pub main_file: Option<PathBuf>,
     pub open_files: Vec<PathBuf>,
     pub active_file: Option<PathBuf>,
@@ -22,10 +24,18 @@ pub struct Project {
 
 impl Project {
     pub fn new(root: PathBuf) -> Self {
-        let name = root.file_name().and_then(|n| n.to_str()).unwrap_or("Untitled").to_string();
+        let name = root.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("Untitled")
+            .to_string();
         let main_file = find_main(&root);
-        Project { root, name, main_file, open_files: vec![], active_file: None,
-                  file_contents: HashMap::new(), dirty: HashMap::new() }
+        Project {
+            root, name, main_file,
+            open_files: vec![],
+            active_file: None,
+            file_contents: HashMap::new(),
+            dirty: HashMap::new(),
+        }
     }
 
     pub fn visible_files(&self) -> Vec<FileEntry> {
@@ -54,7 +64,10 @@ impl Project {
     }
 
     pub fn save_all(&mut self) -> anyhow::Result<()> {
-        let dirty: Vec<PathBuf> = self.dirty.iter().filter(|(_, &d)| d).map(|(p, _)| p.clone()).collect();
+        let dirty: Vec<PathBuf> = self.dirty.iter()
+            .filter(|(_, &d)| d)
+            .map(|(p, _)| p.clone())
+            .collect();
         for p in dirty { self.save_file(&p)?; }
         Ok(())
     }
@@ -79,65 +92,101 @@ impl Project {
         self.dirty.get(path).copied().unwrap_or(false)
     }
 
+    /// What gets compiled when the user presses Compile:
+    ///
+    /// 1. Active tab is a .tex file  →  compile that file (always)
+    /// 2. Active tab is not .tex (e.g. .bib) and a ★ main file is pinned  →  use main
+    /// 3. No active .tex tab but a ★ main file is pinned  →  use main
+    /// 4. None of the above  →  caller shows a warning
+    ///
+    /// This means the active tab ALWAYS takes priority over the pinned main file,
+    /// so switching tabs and pressing Compile does exactly what you expect.
+    /// The ★ pin only kicks in when the active tab is not a .tex file.
     pub fn compile_target(&self) -> Option<&PathBuf> {
-        // Priority:
-        // 1. Explicitly set main_file (user chose it via "Set as main")
-        // 2. Active .tex file
-        // 3. Any main_file auto-detected at project open
-        if let Some(ref mf) = self.main_file {
-            return Some(mf);
-        }
+        // Active .tex tab always wins
         if let Some(ref af) = self.active_file {
             if af.extension().and_then(|e| e.to_str()) == Some("tex") {
                 return Some(af);
             }
         }
+        // Fallback: pinned main file (active tab is non-tex or nothing open)
+        if let Some(ref mf) = self.main_file {
+            return Some(mf);
+        }
         None
     }
 
-    /// Explicitly override the main file. Saved in .ferroleaf.json
+    /// Pin a file as the permanent main file. Persisted in .ferroleaf.json.
     pub fn set_main_file(&mut self, path: PathBuf) {
         self.main_file = Some(path);
     }
 
     pub fn create_tex_file(&mut self, name: &str) -> anyhow::Result<PathBuf> {
-        let fname = if name.ends_with(".tex") { name.to_string() } else { format!("{}.tex", name) };
+        let fname = if name.ends_with(".tex") {
+            name.to_string()
+        } else {
+            format!("{}.tex", name)
+        };
         let path = self.root.join(&fname);
         std::fs::write(&path, format!("% {}\n", fname))?;
         Ok(path)
     }
 }
 
+/// Auto-detect the main file when opening a project.
+///
+/// Rules (in priority order):
+/// 1. A file with a conventional main-file name exists at the root.
+/// 2. Exactly ONE .tex file at the root contains \documentclass  →  that's the main.
+/// 3. Multiple .tex files with \documentclass  →  return None and let the user
+///    pick via the ★ star button in the file tree.
 fn find_main(root: &Path) -> Option<PathBuf> {
+    // Rule 1: conventional names
     for name in &["main.tex","paper.tex","thesis.tex","document.tex","article.tex"] {
         let c = root.join(name);
         if c.exists() { return Some(c); }
     }
-    if let Ok(entries) = std::fs::read_dir(root) {
-        let mut candidates: Vec<PathBuf> = entries.filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("tex"))
-            .filter(|e| std::fs::read_to_string(e.path())
-                .map(|s| s.contains("\\documentclass")).unwrap_or(false))
-            .map(|e| e.path()).collect();
-        candidates.sort();
-        if !candidates.is_empty() { return Some(candidates[0].clone()); }
+
+    // Rule 2/3: scan for \documentclass
+    let candidates: Vec<PathBuf> = std::fs::read_dir(root)
+        .into_iter()
+        .flatten()
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            e.path().extension().and_then(|x| x.to_str()) == Some("tex")
+        })
+        .filter(|e| {
+            std::fs::read_to_string(e.path())
+                .map(|s| s.contains(r"\documentclass"))
+                .unwrap_or(false)
+        })
+        .map(|e| e.path())
+        .collect();
+
+    if candidates.len() == 1 {
+        Some(candidates[0].clone())
+    } else {
+        // 0 or 2+ candidates — don't guess, let the user decide
+        None
     }
-    None
 }
 
 fn should_show(path: &Path) -> bool {
+    // Hide .synctex.gz (extension would just be "gz" so check full name too)
+    if path.to_string_lossy().ends_with(".synctex.gz") { return false; }
     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-        let ext = ext.to_lowercase();
-        // Also hide .synctex.gz by checking full filename
-        if path.to_string_lossy().ends_with(".synctex.gz") { return false; }
-        if HIDDEN_EXT.iter().any(|h| *h == ext) { return false; }
+        if HIDDEN_EXT.iter().any(|h| *h == ext.to_lowercase()) { return false; }
     }
     true
 }
 
 fn collect(dir: &Path, out: &mut Vec<FileEntry>, depth: usize, main: &Option<PathBuf>) {
-    let mut items: Vec<_> = WalkDir::new(dir).max_depth(1).min_depth(1).into_iter()
-        .filter_map(|e| e.ok()).collect();
+    let mut items: Vec<_> = WalkDir::new(dir)
+        .max_depth(1).min_depth(1)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .collect();
+
     items.sort_by(|a, b| {
         match (a.file_type().is_dir(), b.file_type().is_dir()) {
             (true, false) => std::cmp::Ordering::Less,
@@ -145,10 +194,12 @@ fn collect(dir: &Path, out: &mut Vec<FileEntry>, depth: usize, main: &Option<Pat
             _ => a.file_name().cmp(b.file_name()),
         }
     });
+
     for item in items {
         let path = item.path().to_path_buf();
         let name = item.file_name().to_string_lossy().to_string();
         if name.starts_with('.') || name == "target" { continue; }
+
         if item.file_type().is_dir() {
             out.push(FileEntry { path: path.clone(), name, depth, is_dir: true, is_main: false });
             collect(&path, out, depth + 1, main);
@@ -173,12 +224,9 @@ pub struct ProjectSettings {
     pub main_file: Option<String>,
     #[serde(default = "default_compiler")]
     pub compiler: String,
-    #[serde(default)]
-    pub bibtex: bool,
-    #[serde(default)]
-    pub shell_escape: bool,
-    #[serde(default)]
-    pub extra_args: Vec<String>,
+    #[serde(default)] pub bibtex: bool,
+    #[serde(default)] pub shell_escape: bool,
+    #[serde(default)] pub extra_args: Vec<String>,
 }
 
 fn default_compiler() -> String { "pdflatex".into() }

@@ -266,7 +266,10 @@ impl Ferroleaf {
                 }
                 let Some(project) = &self.project else { return Task::none(); };
                 let Some(target) = project.compile_target().cloned() else {
-                    self.set_status("No compile target — open a .tex file".into(), StatusKind::Warning);
+                    self.set_status(
+                        "No compile target — open a .tex file, or click ★ next to a file to set it as main".into(),
+                        StatusKind::Warning,
+                    );
                     return Task::none();
                 };
                 let save = self.update(Message::SaveAll);
@@ -611,12 +614,23 @@ impl Ferroleaf {
             .unwrap_or_default();
 
         let compiler_name = self.compile_options.compiler.display().to_string();
-        let target_name = self.project.as_ref()
-            .and_then(|p| p.compile_target())
-            .and_then(|t| t.file_name())
-            .and_then(|n| n.to_str())
-            .map(|s| format!(" → {}", s))
-            .unwrap_or_default();
+        // Show which file Ctrl+B will compile, and whether it's pinned (★) or active tab
+        let target_name = self.project.as_ref().and_then(|p| {
+            let is_active_tex = p.active_file.as_ref()
+                .and_then(|f| f.extension().and_then(|e| e.to_str()))
+                == Some("tex");
+            let is_pinned = p.main_file.is_some();
+            p.compile_target().and_then(|t| t.file_name()).and_then(|n| n.to_str())
+                .map(|s| {
+                    if is_active_tex {
+                        format!(" → {} (active tab)", s)
+                    } else if is_pinned {
+                        format!(" → {} (★ main)", s)
+                    } else {
+                        format!(" → {}", s)
+                    }
+                })
+        }).unwrap_or_default();
 
         container(row![
             Space::with_width(8),
