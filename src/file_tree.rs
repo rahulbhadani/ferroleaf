@@ -67,7 +67,7 @@ impl FileTree {
             let is_active = !entry.is_dir && active_file == Some(&entry.path);
 
             let (icon, icon_color): (&str, Color) = if entry.is_dir {
-                let ch = if self.expanded_dirs.contains(&entry.path) { "▾" } else { "▸" };
+                let ch = if self.expanded_dirs.contains(&entry.path) { "v" } else { ">" };
                 (ch, Palette::WARNING)
             } else {
                 file_icon_colored(&entry.name)
@@ -103,20 +103,21 @@ impl FileTree {
             .width(Length::Fill)
             .padding([3u16, 4u16]);
 
-            // "Set as main" star button — only on .tex files that aren't already main
+            // "Set as main" [M] button — only on .tex files that aren't already main
             let row_widget: Element<Message> = if is_tex {
                 let star_color = if is_main { Palette::PINK_BRIGHT } else { Palette::TEXT_DIM };
                 let star_msg = if is_main {
-                    Message::Noop // already main, clicking does nothing
+                    Message::Noop
                 } else {
                     Message::SetMainFile(entry.path.clone())
                 };
+                let star_btn = button(text("[M]").size(11u16).color(star_color))
+                    .on_press(star_msg)
+                    .style(crate::theme::ghost_button)
+                    .padding([2u16, 6u16]);
                 row![
                     label_btn,
-                    button(text("★").size(11u16).color(star_color))
-                        .on_press(star_msg)
-                        .style(crate::theme::ghost_button)
-                        .padding([2u16, 6u16]),
+                    star_btn,
                 ].align_y(Alignment::Center).into()
             } else {
                 label_btn.into()
@@ -149,6 +150,6 @@ fn file_icon_colored(name: &str) -> (&'static str, Color) {
         "pdf"                                  => ("P",   PDF_RED),
         "png" | "jpg" | "jpeg" | "svg" | "eps" => ("I",   IMG_GREEN),
         "txt" | "md"                           => ("D",   TXT_SAND),
-        _                                      => ("·", DIM),
+        _                                      => (".", DIM),
     }
 }

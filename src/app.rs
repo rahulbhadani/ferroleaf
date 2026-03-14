@@ -5,7 +5,7 @@ use iced::{
     keyboard, mouse,
     widget::{
         button, column, container, horizontal_rule, row, scrollable,
-        stack, svg, text, text_editor, text_input, Space,
+        stack, svg, text, text_editor, text_input, tooltip, Space,
     },
     Alignment, Element, Event, Font, Length, Subscription, Task, Theme,
 };
@@ -125,7 +125,7 @@ impl Ferroleaf {
         let latex_available     = Compiler::is_latex_available();
         let available_compilers = Compiler::available_compilers();
         let warn = if !latex_available {
-            Some(("LaTeX not found — install texlive-full".into(), StatusKind::Warning))
+            Some(("LaTeX not found - install texlive-full".into(), StatusKind::Warning))
         } else { None };
         (Ferroleaf {
             project: None, file_tree: Default::default(),
@@ -162,7 +162,7 @@ impl Ferroleaf {
                 if self.dialog_open { return Task::none(); }
                 self.dialog_open = true;
                 return Task::perform(
-                    crate::dialog::pick_folder("New Project — Choose Folder"),
+                    crate::dialog::pick_folder("New Project - Choose Folder"),
                     |opt_path| match opt_path {
                         Some(path) => {
                             let main = path.join("main.tex");
@@ -265,7 +265,7 @@ impl Ferroleaf {
                 }
 
                 self.set_status(
-                    format!("Main file set to: {}  (★ in file tree)", name),
+                    format!("Main file set to: {}  ([M] in file tree)", name),
                     StatusKind::Success,
                 );
             }
@@ -318,13 +318,13 @@ impl Ferroleaf {
 
             Message::Compile => {
                 if !self.latex_available {
-                    self.set_status("LaTeX not found — install texlive-full".into(), StatusKind::Error);
+                    self.set_status("LaTeX not found - install texlive-full".into(), StatusKind::Error);
                     return Task::none();
                 }
                 let Some(project) = &self.project else { return Task::none(); };
                 let Some(target) = project.compile_target().cloned() else {
                     self.set_status(
-                        "No compile target — open a .tex file, or click ★ next to a file to set it as main".into(),
+                        "No compile target -- open a .tex file, or click [M] next to a file to set it as main".into(),
                         StatusKind::Warning,
                     );
                     return Task::none();
@@ -349,7 +349,7 @@ impl Ferroleaf {
                             let path = pdf_path.clone(); let zoom = self.pdf_viewer.zoom;
                             self.compile_status = CompileStatus::Success(r.clone());
                             self.set_status(
-                                format!("Done in {:.1}s — {} err, {} warn", r.duration.as_secs_f32(), ne, nw),
+                                format!("Done in {:.1}s : {} err, {} warn", r.duration.as_secs_f32(), ne, nw),
                                 if ne == 0 { StatusKind::Success } else { StatusKind::Warning },
                             );
                             self.pdf_viewer.load_pdf(path.clone());
@@ -358,13 +358,13 @@ impl Ferroleaf {
                             }, Message::PdfPagesRendered);  // Vec<RenderedPage>
                         } else {
                             self.compile_status = CompileStatus::Failed(r.clone());
-                            self.set_status(format!("Failed — {} errors", ne), StatusKind::Error);
+                            self.set_status(format!("Failed: {} errors", ne), StatusKind::Error);
                         }
                     }
                     CompileStatus::Failed(r) => {
                         self.compile_log = r.raw_log.clone();
                         self.compile_status = CompileStatus::Failed(r.clone());
-                        self.set_status(format!("Failed — {} errors", r.errors().len()), StatusKind::Error);
+                        self.set_status(format!("Failed: {} errors", r.errors().len()), StatusKind::Error);
                     }
                     other => { self.compile_status = other.clone(); }
                 }
@@ -566,7 +566,7 @@ impl Ferroleaf {
             Message::Quit => { std::process::exit(0); }
             Message::About => {
                 self.set_status(
-                    "Ferroleaf — Native LaTeX editor for Linux  (iced 0.13 · SyncTeX)".into(),
+                    "Ferroleaf - Native LaTeX editor for Linux (iced 0.13 + SyncTeX)".into(),
                     StatusKind::Info,
                 );
             }
@@ -632,23 +632,18 @@ impl Ferroleaf {
 
     fn view_toolbar(&self) -> Element<Message> {
         let compiling = self.compile_status.is_running();
-        let compile_icon = if compiling {
-            crate::icons::COMPILING
-        } else {
-            crate::icons::COMPILE
-        };
-        let compile_label = if compiling { " Compiling…" } else { " Compile" };
+        let compile_icon = if compiling { crate::icons::COMPILING } else { crate::icons::COMPILE };
+        let compile_label = if compiling { " Compiling..." } else { " Compile" };
 
         container(row![
             container(text("Ferroleaf").size(14).color(Palette::PINK_BRIGHT))
                 .padding([0u16, 14u16]),
-            svg_btn(crate::icons::SIDEBAR,      Message::ToggleSidebar, 20),
-            svg_btn(crate::icons::OPEN_FOLDER,  Message::OpenProject,   20),
-            svg_btn(crate::icons::NEW_FILE,     Message::NewFile,       20),
-            svg_btn(crate::icons::SETTINGS,     Message::ShowSettings,  20),
+            tip(svg_btn(crate::icons::SIDEBAR,     Message::ToggleSidebar,  20), "Toggle Sidebar  Ctrl+\\"),
+            tip(svg_btn(crate::icons::OPEN_FOLDER, Message::OpenProject,    20), "Open Project Folder  Ctrl+O"),
+            tip(svg_btn(crate::icons::NEW_FILE,    Message::NewFile,        20), "New File  Ctrl+N"),
+            tip(svg_btn(crate::icons::SETTINGS,    Message::ShowSettings,   20), "Settings"),
             Space::with_width(Length::Fill),
-            svg_btn(crate::icons::LOG,          Message::ToggleLogPanel, 20),
-            // Compile button: SVG icon + text label
+            tip(svg_btn(crate::icons::LOG,         Message::ToggleLogPanel, 20), "Toggle Compiler Log"),
             button(
                 row![
                     svg(svg::Handle::from_memory(compile_icon))
@@ -681,10 +676,13 @@ impl Ferroleaf {
 
         if self.log_panel_visible {
             column![
-                container(with_sidebar).height(Length::FillPortion(3)),
-                // Element doesn't have .height() — wrap in container instead
-                container(self.view_log()).height(Length::FillPortion(1)).width(Length::Fill),
-            ].spacing(0).height(Length::Fill).into()
+                container(with_sidebar)
+                    .width(Length::Fill)
+                    .height(Length::FillPortion(3)),
+                container(self.view_log())
+                    .width(Length::Fill)
+                    .height(Length::FillPortion(1)),
+            ].spacing(0).width(Length::Fill).height(Length::Fill).into()
         } else { with_sidebar }
     }
 
@@ -704,7 +702,7 @@ impl Ferroleaf {
                 ib("+", Message::NewFile),
             ].align_y(Alignment::Center).padding([6u16, 8u16]),
             container(
-                text_input("Search…", &self.search_query)
+                text_input("Search...", &self.search_query)
                     .on_input(Message::SearchChanged)
                     .size(12).padding([4u16, 8u16])
                     .style(crate::theme::search_input)
@@ -748,7 +746,7 @@ impl Ferroleaf {
                 .width(Length::Fill).height(Length::Fill)
                 .style(crate::theme::editor_pane)
                 .into()
-            } else { blank("Loading…") }
+            } else { blank("Loading...") }
         } else { blank("Select a file to edit") };
 
         column![tabs, body].spacing(0).width(Length::Fill).height(Length::Fill).into()
@@ -823,7 +821,7 @@ impl Ferroleaf {
             MenuKind::Build => {
                 let c = &self.compile_options.compiler;
                 vec![
-                    dmi("▶  Compile  Ctrl+B", Message::Compile),
+                    dmi("Compile  Ctrl+B", Message::Compile),
                     dms(),
                     dmtick("pdfLaTeX",  *c == CompilerKind::PdfLatex,
                         Message::CompileOptionChanged(CompileOptionMsg::SetCompiler("pdflatex".into()))),
@@ -935,13 +933,13 @@ impl Ferroleaf {
         let diags: Vec<Element<Message>> = self.compile_status.last_result().map(|r| {
             r.diagnostics.iter().map(|d| {
                 let (pfx, col) = match d.level {
-                    DiagnosticLevel::Error   => ("✖", Palette::ERROR),
-                    DiagnosticLevel::Warning => ("⚠", Palette::WARNING),
-                    DiagnosticLevel::Info    => ("i", Palette::TEXT_DIM),
+                    DiagnosticLevel::Error   => ("[E]", Palette::ERROR),
+                    DiagnosticLevel::Warning => ("[W]", Palette::WARNING),
+                    DiagnosticLevel::Info    => ("[i]", Palette::TEXT_DIM),
                 };
                 let loc = match (d.file.as_ref(), d.line) {
-                    (Some(f), Some(l)) => format!("{}:{} — ", f, l),
-                    (Some(f), None)    => format!("{} — ", f),
+                    (Some(f), Some(l)) => format!("{}:{} - ", f, l),
+                    (Some(f), None)    => format!("{} - ", f),
                     _                  => String::new(),
                 };
                 let lbl = row![
@@ -961,7 +959,7 @@ impl Ferroleaf {
                 text("Compiler Log").size(12).color(Palette::TEXT_DIM),
                 Space::with_width(Length::Fill),
                 ib("Clear", Message::ClearLog),
-                ib("✕", Message::ToggleLogPanel),
+                ib("X", Message::ToggleLogPanel),
             ].align_y(Alignment::Center).padding([4u16, 8u16]),
             horizontal_rule(1).style(crate::theme::subtle_rule),
             scrollable(column![
@@ -989,12 +987,12 @@ impl Ferroleaf {
         }).unwrap_or_else(|| ("Ready".to_string(), Palette::TEXT_DIM));
 
         let pill = match &self.compile_status {
-            CompileStatus::Idle => text("●").size(11u16).color(Palette::TEXT_DIM),
+            CompileStatus::Idle                    => text("[ ]").size(11u16).color(Palette::TEXT_DIM),
             CompileStatus::Compiling { pass, total } =>
-                text(format!("→ {}/{}", pass, total)).size(11u16).color(Palette::WARNING),
-            CompileStatus::RunningBibtex => text("→ BibTeX").size(11u16).color(Palette::WARNING),
-            CompileStatus::Success(_)    => text("✔ OK").size(11u16).color(Palette::SUCCESS),
-            CompileStatus::Failed(_)     => text("✖ Error").size(11u16).color(Palette::ERROR),
+                text(format!("Building {}/{}", pass, total)).size(11u16).color(Palette::WARNING),
+            CompileStatus::RunningBibtex => text("BibTeX...").size(11u16).color(Palette::WARNING),
+            CompileStatus::Success(_)    => text("[OK]").size(11u16).color(Palette::SUCCESS),
+            CompileStatus::Failed(_)     => text("[ERR]").size(11u16).color(Palette::ERROR),
         };
 
         let cursor = self.project.as_ref()
@@ -1013,11 +1011,11 @@ impl Ferroleaf {
             p.compile_target().and_then(|t| t.file_name()).and_then(|n| n.to_str())
                 .map(|s| {
                     if is_active_tex {
-                        format!(" → {} (active tab)", s)
+                        format!(" -> {} (active tab)", s)
                     } else if is_pinned {
-                        format!(" → {} (★ main)", s)
+                        format!(" -> {} (main)", s)
                     } else {
-                        format!(" → {}", s)
+                        format!(" -> {}", s)
                     }
                 })
         }).unwrap_or_default();
@@ -1068,7 +1066,7 @@ impl Ferroleaf {
             row![
                 text("Settings").size(22).color(Palette::PINK_BRIGHT),
                 Space::with_width(Length::Fill),
-                ib("✕", Message::CloseSettings),
+                ib("X", Message::CloseSettings),
             ].align_y(Alignment::Center),
             Space::with_height(16),
             text("Compiler").size(12).color(Palette::TEXT_DIM),
@@ -1137,6 +1135,18 @@ fn svg_btn(data: &'static [u8], msg: Message, size: u16) -> Element<'static, Mes
     .into()
 }
 
+/// Wrap any element with a bottom tooltip using the dark tooltip style.
+fn tip(content: Element<'static, Message>, label: &'static str) -> Element<'static, Message> {
+    tooltip(
+        content,
+        container(text(label).size(11u16).color(crate::theme::Palette::TEXT_PRIMARY))
+            .padding([4u16, 8u16])
+            .style(crate::theme::tooltip_box),
+        tooltip::Position::Bottom,
+    )
+    .into()
+}
+
 /// Menu / context-menu item button.
 fn dmi(label: impl ToString, msg: Message) -> Element<'static, Message> {
     button(
@@ -1157,9 +1167,9 @@ fn dms() -> Element<'static, Message> {
         .into()
 }
 
-/// Menu item with a checkmark toggle (☑/☐ prefix).
+/// Menu item with a checkmark toggle ([x]/[ ] prefix).
 fn dmcheck(label: &str, checked: bool, msg: Message) -> Element<'static, Message> {
-    let prefix = if checked { "✔ " } else { "  " };
+    let prefix = if checked { "[x] " } else { "[ ] " };
     let color  = if checked { Palette::PINK_BRIGHT } else { Palette::TEXT_SECONDARY };
     button(
         text(format!("{}{}", prefix, label)).size(13u16).color(color)
@@ -1171,9 +1181,9 @@ fn dmcheck(label: &str, checked: bool, msg: Message) -> Element<'static, Message
     .into()
 }
 
-/// Menu item with a radio-button indicator (● / space prefix).
+/// Menu item with a radio-button indicator ([*]/[ ] prefix).
 fn dmtick(label: &str, selected: bool, msg: Message) -> Element<'static, Message> {
-    let prefix = if selected { "● " } else { "  " };
+    let prefix = if selected { "[*] " } else { "[ ] " };
     let color  = if selected { Palette::PINK_BRIGHT } else { Palette::TEXT_SECONDARY };
     button(
         text(format!("{}{}", prefix, label)).size(13u16).color(color)

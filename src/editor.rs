@@ -261,9 +261,9 @@ pub fn tab_bar<'a>(
     let tabs: Vec<Element<Message>> = open_files.iter().map(|path| {
         let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("?");
         let is_active = active == Some(path);
-        let dot = if dirty(path) { "● " } else { "" };
+        let dot = if dirty(path) { "* " } else { "" };
 
-        let close_btn = button(text("×").size(13).color(Palette::TEXT_DIM))
+        let close_btn = button(text("x").size(13).color(Palette::TEXT_DIM))
             .on_press(Message::CloseTab(path.clone()))
             .style(crate::theme::ghost_button)
             .padding([0u16, 4u16]);

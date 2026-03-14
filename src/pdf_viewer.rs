@@ -92,16 +92,16 @@ impl PdfViewer {
         };
 
         container(row![
-            pb("◂", Message::PdfPrevPage),
+            pb("<", Message::PdfPrevPage),
             page_info,
-            pb("▸", Message::PdfNextPage),
+            pb(">", Message::PdfNextPage),
             Space::with_width(12),
-            pb("−", Message::PdfZoomOut),
+            pb("-", Message::PdfZoomOut),
             zoom_label,
             pb("+", Message::PdfZoomIn),
             pb("[.]", Message::PdfZoomFit),
             Space::with_width(Length::Fill),
-            pb("↻  Recompile", Message::Compile),
+            pb("Recompile", Message::Compile),
         ].spacing(4).align_y(Alignment::Center).padding([4u16, 8u16]))
         .width(Length::Fill).height(36)
         .style(crate::theme::toolbar)
@@ -112,7 +112,7 @@ impl PdfViewer {
         if self.rendered_pages.is_empty() {
             return container(
                 column![
-                    text("Rendering…").size(14u16).color(Palette::TEXT_DIM),
+                    text("Rendering...").size(14u16).color(Palette::TEXT_DIM),
                     text("(requires poppler-utils / pdftoppm)")
                         .size(11u16).color(Palette::TEXT_DIM),
                 ].spacing(4).align_x(Alignment::Center)

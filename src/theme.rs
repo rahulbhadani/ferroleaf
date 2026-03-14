@@ -98,6 +98,19 @@ pub fn toolbar(_t: &Theme) -> container::Style {
     container_bg(Palette::BG_DARKEST)
 }
 
+pub fn tooltip_box(_t: &Theme) -> container::Style {
+    container::Style {
+        background: Some(Background::Color(Color { r: 0.14, g: 0.10, b: 0.12, a: 0.97 })),
+        border: Border { color: Palette::BROWN_MID, width: 1.0, radius: 4.0.into() },
+        text_color: Some(Palette::TEXT_PRIMARY),
+        shadow: Shadow {
+            color: Color { r: 0.0, g: 0.0, b: 0.0, a: 0.35 },
+            offset: iced::Vector::new(0.0, 2.0),
+            blur_radius: 6.0,
+        },
+    }
+}
+
 pub fn status_bar(_t: &Theme) -> container::Style {
     container_bg(Palette::BG_DARKEST)
 }
