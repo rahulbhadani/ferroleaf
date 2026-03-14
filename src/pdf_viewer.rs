@@ -139,6 +139,12 @@ impl PdfViewer {
         let sw = page.width as f32 * self.zoom;
         let sh = page.height as f32 * self.zoom;
         let page_num = page.page_number;
+        // Store rendered (zoomed) dimensions so the click handler can normalise them.
+        let pw = sw;
+        let ph = sh;
+        // Original (unzoomed) pixel dimensions — what synctex coords are based on.
+        let orig_w = page.width as f32;
+        let orig_h = page.height as f32;
 
         let img: Element<Message> = if let Some(handle) = &page.handle {
             button(
@@ -146,7 +152,20 @@ impl PdfViewer {
                     .width(Length::Fixed(sw))
                     .height(Length::Fixed(sh))
             )
-            .on_press(Message::PdfClicked { page: page_num, x: 0.0, y: 0.0 })
+            // on_press_with gives us the cursor position within the widget at click time.
+            .on_press_with(move || {
+                // We don't have the cursor offset here (iced limitation), so we
+                // emit a sentinel and rely on the most-recent mouse position tracked
+                // via the subscription in app.rs. For now emit centre as fallback —
+                // the real fix is to track CursorMoved events (see app.rs).
+                Message::PdfClicked {
+                    page: page_num,
+                    x: pw / 2.0,
+                    y: ph / 2.0,
+                    page_w: orig_w,
+                    page_h: orig_h,
+                }
+            })
             .style(crate::theme::ghost_button)
             .padding(0u16)
             .into()

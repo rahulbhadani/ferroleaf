@@ -70,9 +70,26 @@ impl EditorState {
     }
     pub fn text(&self) -> String { self.content.text() }
     pub fn cursor_position(&self) -> (usize, usize) { self.content.cursor_position() }
-    pub fn jump_to_line(&mut self, _line: u32) {
-        // Iced 0.13 doesn't yet expose a programmatic scroll-to-line on text_editor.
-        // The status bar will show the target line number.
+    /// Move the editor cursor to the given 1-based line number.
+    ///
+    /// iced 0.13 has no direct "scroll to line" API, but Content::perform
+    /// accepts Action::Move(Motion) calls that reposition the cursor and
+    /// cause the widget to scroll the cursor into view on the next frame.
+    ///
+    /// Strategy: jump to document start, walk down (line-1) rows,
+    /// then End+Home so the whole line is visible and cursor is at column 0.
+    pub fn jump_to_line(&mut self, line: u32) {
+        use text_editor::{Action, Motion};
+        let target = line.max(1) as usize;
+        // 1. Move to document start (clears selection).
+        self.content.perform(Action::Move(Motion::DocumentStart));
+        // 2. Walk down (target - 1) lines.
+        for _ in 1..target {
+            self.content.perform(Action::Move(Motion::Down));
+        }
+        // 3. End then Home: scrolls the line into view, cursor rests at col 0.
+        self.content.perform(Action::Move(Motion::End));
+        self.content.perform(Action::Move(Motion::Home));
     }
 }
 

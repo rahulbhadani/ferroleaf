@@ -37,7 +37,8 @@ pub enum Message {
     CompileOptionChanged(CompileOptionMsg),
     ClearLog,
     PdfPagesRendered(Vec<crate::pdf_viewer::RenderedPage>),
-    PdfClicked { page: usize, x: f32, y: f32 },
+    MouseMoved(f32, f32),
+    PdfClicked { page: usize, x: f32, y: f32, page_w: f32, page_h: f32 },
     PdfNextPage, PdfPrevPage, PdfZoomIn, PdfZoomOut, PdfZoomFit,
     SynctexResult(Option<synctex::SourceLocation>),
     GoToLine(u32),
@@ -75,6 +76,8 @@ pub struct Ferroleaf {
     status_message: Option<(String, StatusKind)>,
     latex_available: bool,
     available_compilers: Vec<CompilerKind>,
+    /// Last known cursor position in window coordinates (updated via subscription).
+    mouse_pos: (f32, f32),
 }
 
 impl Ferroleaf {
@@ -93,6 +96,7 @@ impl Ferroleaf {
             split_ratio: 0.50, font_size: 14,
             search_query: String::new(), modal: Modal::WelcomeScreen,
             status_message: warn, latex_available, available_compilers,
+            mouse_pos: (0.0, 0.0),
         }, Task::none())
     }
 
@@ -324,14 +328,20 @@ impl Ferroleaf {
                 self.pdf_viewer.total_pages = pages.len();
                 self.pdf_viewer.rendered_pages = pages;
             }
-            Message::PdfClicked { page, x, y } => {
+            Message::MouseMoved(mx, my) => {
+                self.mouse_pos = (mx, my);
+            }
+
+            Message::PdfClicked { page, x: _, y: _, page_w, page_h } => {
+                // Use the real last-known cursor position instead of the sentinel.
+                let (mx, my) = self.mouse_pos;
                 if let Some(project) = &self.project {
                     if let Some(target) = project.compile_target() {
                         let pdf = target.with_extension("pdf");
                         if pdf.exists() {
                             return Task::perform(async move {
                                 tokio::task::spawn_blocking(move || {
-                                    synctex::pdf_to_source(&pdf, page as u32 + 1, x, y)
+                                    synctex::pdf_to_source(&pdf, page as u32 + 1, mx, my, page_w, page_h)
                                 }).await.ok().flatten()
                             }, Message::SynctexResult);
                         }
@@ -426,6 +436,8 @@ impl Ferroleaf {
         iced::event::listen_with(|ev, _status, _id| match ev {
             Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) =>
                 Some(Message::KeyPressed(key, modifiers)),
+            Event::Mouse(iced::mouse::Event::CursorMoved { position }) =>
+                Some(Message::MouseMoved(position.x, position.y)),
             _ => None,
         })
     }

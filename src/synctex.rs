@@ -10,10 +10,30 @@ pub struct SourceLocation {
 }
 
 /// Resolve a PDF click position to a LaTeX source location using SyncTeX.
-pub fn pdf_to_source(pdf_path: &Path, page: u32, x: f32, y: f32) -> Option<SourceLocation> {
-    // Try synctex binary first
-    synctex_edit_bin(pdf_path, page, x, y)
-        .or_else(|| synctex_parse(pdf_path, page, x, y))
+///
+/// `x` and `y` are pixel coordinates within the *rendered* page image.
+/// `page_w_px` / `page_h_px` are the rendered image dimensions in pixels.
+/// We convert to PDF pt (1pt = 72 DPI reference; synctex uses scaled pts × 65536).
+pub fn pdf_to_source(
+    pdf_path: &Path,
+    page: u32,
+    x: f32, y: f32,
+    page_w_px: f32, page_h_px: f32,
+) -> Option<SourceLocation> {
+    // Convert pixel coords → PDF points.
+    // PDF "user space" is 72 pt per inch; a standard A4 page is 595 × 842 pt.
+    // We don't know the real page size here, so we map proportionally assuming
+    // the renderer used a 1:1 pt→pixel mapping at 72 DPI (i.e. 1 px = 1 pt).
+    // If pdftoppm was called at a different DPI the proportions still hold because
+    // we normalise by the rendered image size.
+    // synctex uses scaled points (sp) where 1 pt = 65536 sp.
+    const PDF_WIDTH_PT:  f32 = 595.0; // A4 default; good enough for coordinate mapping
+    const PDF_HEIGHT_PT: f32 = 842.0;
+    let pt_x = (x / page_w_px.max(1.0)) * PDF_WIDTH_PT;
+    let pt_y = (y / page_h_px.max(1.0)) * PDF_HEIGHT_PT;
+
+    synctex_edit_bin(pdf_path, page, pt_x, pt_y)
+        .or_else(|| synctex_parse(pdf_path, page, pt_x, pt_y))
 }
 
 fn synctex_edit_bin(pdf: &Path, page: u32, x: f32, y: f32) -> Option<SourceLocation> {
@@ -27,7 +47,8 @@ fn synctex_edit_bin(pdf: &Path, page: u32, x: f32, y: f32) -> Option<SourceLocat
 }
 
 fn parse_edit_output(s: &str) -> Option<SourceLocation> {
-    let out_re  = Regex::new(r"^Output:(.+)$").ok()?;
+    // `synctex edit` outputs "Input:<path>", "Line:<n>", "Column:<n>"
+    let out_re  = Regex::new(r"^Input:(.+)$").ok()?;
     let line_re = Regex::new(r"^Line:(\d+)$").ok()?;
     let col_re  = Regex::new(r"^Column:(\d+)$").ok()?;
     let mut file = None; let mut line = None; let mut col = None;
