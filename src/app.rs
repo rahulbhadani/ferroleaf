@@ -62,6 +62,7 @@ pub enum Message {
     GoToLine(u32),
     ToggleSidebar, ToggleLogPanel, ShowSettings, CloseSettings,
     KeyPressed(keyboard::Key, keyboard::Modifiers),
+    WindowResized(f32, f32),
     // ── Menu bar & context menu ───────────────────────────────────────────────
     ToggleMenu(MenuKind),
     Dismiss,
@@ -118,6 +119,9 @@ pub struct Ferroleaf {
     window_height: f32,
     /// Guard against opening a second native dialog while one is already open.
     dialog_open: bool,
+    /// When true, the next PdfPagesRendered will auto-fit zoom and clear this flag.
+    /// Set only when a brand-new PDF arrives from a compile, never on zoom rerenders.
+    pdf_fit_on_next_render: bool,
 }
 
 impl Ferroleaf {
@@ -127,7 +131,7 @@ impl Ferroleaf {
         let warn = if !latex_available {
             Some(("LaTeX not found - install texlive-full".into(), StatusKind::Warning))
         } else { None };
-        (Ferroleaf {
+        let state = Ferroleaf {
             project: None, file_tree: Default::default(),
             editor_states: Default::default(), pdf_viewer: PdfViewer::new(),
             compile_status: CompileStatus::Idle,
@@ -140,7 +144,14 @@ impl Ferroleaf {
             open_menu: None, context_menu: None,
             window_width: 1440.0, window_height: 900.0,
             dialog_open: false,
-        }, Task::none())
+            pdf_fit_on_next_render: false,
+        };
+        // Query the actual window size immediately so zoom-fit works correctly
+        // even if the window is rendered at a different size than the default.
+        let size_task = iced::window::get_oldest()
+            .and_then(iced::window::get_size)
+            .map(|size| Message::WindowResized(size.width, size.height));
+        (state, size_task)
     }
 
     // ── Update ────────────────────────────────────────────────────────────────
@@ -353,9 +364,13 @@ impl Ferroleaf {
                                 if ne == 0 { StatusKind::Success } else { StatusKind::Warning },
                             );
                             self.pdf_viewer.load_pdf(path.clone());
+                            // Request a fit-to-width on the very next render.
+                            // This flag is checked (and cleared) in PdfPagesRendered.
+                            self.pdf_fit_on_next_render = true;
                             return Task::perform(async move {
-                                crate::pdf_viewer::render_pdf_pages(&path, zoom).await.unwrap_or_default()
-                            }, Message::PdfPagesRendered);  // Vec<RenderedPage>
+                                // Render at zoom=1.0; PdfPagesRendered will rerender at fit zoom.
+                                crate::pdf_viewer::render_pdf_pages(&path, 1.0).await.unwrap_or_default()
+                            }, Message::PdfPagesRendered);
                         } else {
                             self.compile_status = CompileStatus::Failed(r.clone());
                             self.set_status(format!("Failed: {} errors", ne), StatusKind::Error);
@@ -378,8 +393,49 @@ impl Ferroleaf {
             Message::ClearLog => self.compile_log.clear(),
 
             Message::PdfPagesRendered(pages) => {
-                self.pdf_viewer.total_pages = pages.len();
-                self.pdf_viewer.rendered_pages = pages;
+                if pages.len() == 1
+                    && !self.pdf_viewer.rendered_pages.is_empty()
+                    && !self.pdf_fit_on_next_render
+                {
+                    // Single-page render (zoom or navigate) — patch slot in-place.
+                    let p = pages.into_iter().next().unwrap();
+                    let idx = p.page_number;
+                    if idx < self.pdf_viewer.rendered_pages.len() {
+                        self.pdf_viewer.rendered_pages[idx] = p;
+                    }
+                    // Also make sure current_page is pointing at the right slot
+                    // (next_page/prev_page already updated current_page before we got here).
+                } else {
+                    // Full render (initial load at zoom=1.0, or fit rerender).
+                    self.pdf_viewer.total_pages = pages.len();
+                    // Capture the unscaled page width from this render before storing.
+                    // Only update base_page_width when we are rendering at zoom=1.0
+                    // (the very first render after load_pdf), so it stays stable forever.
+                    if self.pdf_fit_on_next_render {
+                        if let Some(first) = pages.first() {
+                            // zoom is currently 1.0 (set in CompileStatusUpdate)
+                            self.pdf_viewer.base_page_width = Some(first.width);
+                        }
+                    }
+                    self.pdf_viewer.rendered_pages = pages;
+
+                    if self.pdf_fit_on_next_render {
+                        self.pdf_fit_on_next_render = false;
+                        let sidebar_w   = if self.sidebar_visible { 220.0_f32 } else { 0.0 };
+                        let pdf_panel_w = (self.window_width - sidebar_w)
+                            * (1.0 - self.split_ratio)
+                            - 48.0;
+                        let base_page_w = self.pdf_viewer.base_page_width
+                            .map(|w| w as f32)
+                            .unwrap_or(794.0);
+                        if base_page_w > 0.0 && pdf_panel_w > 0.0 {
+                            let fit_zoom = (pdf_panel_w / base_page_w).clamp(0.25, 4.0);
+                            self.pdf_viewer.set_zoom(fit_zoom);
+                            // Re-render at fit zoom — flag is now false so no loop.
+                            return self.rerender_pdf();
+                        }
+                    }
+                }
             }
             Message::MouseMoved(mx, my) => {
                 self.mouse_pos = (mx, my);
@@ -401,11 +457,32 @@ impl Ferroleaf {
                     }
                 }
             }
-            Message::PdfNextPage => self.pdf_viewer.next_page(),
-            Message::PdfPrevPage => self.pdf_viewer.prev_page(),
-            Message::PdfZoomIn   => { self.pdf_viewer.zoom_in();  return self.rerender_pdf(); }
-            Message::PdfZoomOut  => { self.pdf_viewer.zoom_out(); return self.rerender_pdf(); }
-            Message::PdfZoomFit  => { self.pdf_viewer.zoom_fit(); return self.rerender_pdf(); }
+            Message::PdfNextPage => {
+                self.pdf_viewer.next_page();
+                return self.rerender_current_page();
+            }
+            Message::PdfPrevPage => {
+                self.pdf_viewer.prev_page();
+                return self.rerender_current_page();
+            }
+            Message::PdfZoomIn   => { self.pdf_viewer.zoom_in();  return self.rerender_current_page(); }
+            Message::PdfZoomOut  => { self.pdf_viewer.zoom_out(); return self.rerender_current_page(); }
+            Message::PdfZoomFit  => {
+                let sidebar_w   = if self.sidebar_visible { 220.0_f32 } else { 0.0 };
+                let pdf_panel_w = (self.window_width - sidebar_w)
+                    * (1.0 - self.split_ratio)
+                    - 48.0;
+                // Use the stable unscaled page width captured at zoom=1.0.
+                // Never derive from current rendered width (which varies with zoom).
+                let base_page_w = self.pdf_viewer.base_page_width
+                    .map(|w| w as f32)
+                    .unwrap_or(794.0);
+                if base_page_w > 0.0 && pdf_panel_w > 0.0 {
+                    let fit_zoom = (pdf_panel_w / base_page_w).clamp(0.25, 4.0);
+                    self.pdf_viewer.set_zoom(fit_zoom);
+                    return self.rerender_pdf();
+                }
+            }
 
             Message::SynctexResult(Some(loc)) => {
                 let path = loc.file.clone(); let line = loc.line;
@@ -423,6 +500,11 @@ impl Ferroleaf {
                     }
                 }
                 self.set_status(format!("Line {}", line), StatusKind::Info);
+            }
+
+            Message::WindowResized(w, h) => {
+                self.window_width  = w;
+                self.window_height = h;
             }
 
             Message::ToggleSidebar  => self.sidebar_visible  = !self.sidebar_visible,
@@ -478,12 +560,18 @@ impl Ferroleaf {
             // ── Right-click context menu ──────────────────────────────────────
             Message::RightClicked => {
                 let (mx, my) = self.mouse_pos;
-                // Determine which pane was clicked based on layout geometry.
-                let sidebar_w = if self.sidebar_visible { 220.0_f32 } else { 0.0 };
-                let editor_end = sidebar_w
-                    + (self.window_width - sidebar_w) * self.split_ratio;
-                let kind = if mx > editor_end && self.pdf_viewer.pdf_path.is_some() {
-                    // Also grab rendered page dims for synctex.
+                // Compute the pixel X where the editor panel ends.
+                // Use a 20px inward safety margin so clicks near the divider
+                // always get the editor context menu, never the PDF one.
+                let sidebar_w  = if self.sidebar_visible { 220.0_f32 } else { 0.0 };
+                let available  = self.window_width - sidebar_w;
+                let editor_end = sidebar_w + available * self.split_ratio - 20.0;
+                // Show PDF context menu only when cursor is clearly inside the
+                // PDF pane AND a PDF has been rendered.
+                let kind = if mx > editor_end
+                    && self.pdf_viewer.pdf_path.is_some()
+                    && !self.pdf_viewer.rendered_pages.is_empty()
+                {
                     ContextMenuKind::PdfViewer
                 } else {
                     ContextMenuKind::Editor
@@ -622,6 +710,8 @@ impl Ferroleaf {
                 Some(Message::MouseMoved(position.x, position.y)),
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) =>
                 Some(Message::RightClicked),
+            Event::Window(iced::window::Event::Resized(size)) =>
+                Some(Message::WindowResized(size.width, size.height)),
             _ => None,
         })
     }
@@ -668,21 +758,24 @@ impl Ferroleaf {
         let center: Element<Message> = row![
             container(self.view_editor()).width(Length::FillPortion(ew)).height(Length::Fill),
             container(self.view_pdf()).width(Length::FillPortion(pw)).height(Length::Fill),
-        ].height(Length::Fill).into();
+        ].width(Length::Fill).height(Length::Fill).into();
 
         let with_sidebar: Element<Message> = if self.sidebar_visible {
-            row![self.view_sidebar(), center].height(Length::Fill).into()
+            row![self.view_sidebar(), center]
+                .width(Length::Fill).height(Length::Fill).into()
         } else { center };
 
         if self.log_panel_visible {
             column![
-                container(with_sidebar)
-                    .width(Length::Fill)
-                    .height(Length::FillPortion(3)),
+                with_sidebar,
                 container(self.view_log())
                     .width(Length::Fill)
                     .height(Length::FillPortion(1)),
-            ].spacing(0).width(Length::Fill).height(Length::Fill).into()
+            ]
+            .spacing(0)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into()
         } else { with_sidebar }
     }
 
@@ -699,7 +792,7 @@ impl Ferroleaf {
             row![
                 text("Files").size(12).color(Palette::TEXT_DIM),
                 Space::with_width(Length::Fill),
-                ib("+", Message::NewFile),
+                tip(ib("+", Message::NewFile), "New File  Ctrl+N"),
             ].align_y(Alignment::Center).padding([6u16, 8u16]),
             container(
                 text_input("Search...", &self.search_query)
@@ -958,8 +1051,8 @@ impl Ferroleaf {
             row![
                 text("Compiler Log").size(12).color(Palette::TEXT_DIM),
                 Space::with_width(Length::Fill),
-                ib("Clear", Message::ClearLog),
-                ib("X", Message::ToggleLogPanel),
+                tip(ib("Clear", Message::ClearLog), "Clear compiler log"),
+                tip(ib("X", Message::ToggleLogPanel), "Close log panel"),
             ].align_y(Alignment::Center).padding([4u16, 8u16]),
             horizontal_rule(1).style(crate::theme::subtle_rule),
             scrollable(column![
@@ -1098,12 +1191,32 @@ impl Ferroleaf {
         self.status_message = Some((msg, kind));
     }
 
+    /// Re-render all pages at the current zoom (used after fit / initial load).
     fn rerender_pdf(&self) -> Task<Message> {
         if let Some(path) = &self.pdf_viewer.pdf_path {
             let path = path.clone(); let zoom = self.pdf_viewer.zoom;
             Task::perform(
                 async move {
                     crate::pdf_viewer::render_pdf_pages(&path, zoom).await.unwrap_or_default()
+                },
+                Message::PdfPagesRendered,
+            )
+        } else { Task::none() }
+    }
+
+    /// Re-render only the current visible page (used for zoom in/out — fast).
+    /// Immediately replaces the current page's handle; other pages stay at old zoom
+    /// until the user navigates to them (lazy rendering).
+    fn rerender_current_page(&self) -> Task<Message> {
+        if let Some(path) = &self.pdf_viewer.pdf_path {
+            let path  = path.clone();
+            let zoom  = self.pdf_viewer.zoom;
+            // pdftoppm uses 1-based page numbers
+            let page1 = (self.pdf_viewer.current_page as u32) + 1;
+            Task::perform(
+                async move {
+                    crate::pdf_viewer::render_pdf_page_range(&path, zoom, Some((page1, page1)))
+                        .await.unwrap_or_default()
                 },
                 Message::PdfPagesRendered,
             )

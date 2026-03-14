@@ -6,7 +6,7 @@
 
 use std::path::{Path, PathBuf};
 use iced::{
-    widget::{button, column, container, image, row, scrollable, text, Space},
+    widget::{button, column, container, image, row, scrollable, text, tooltip, Space},
     Alignment, Element, Length,
 };
 use crate::app::Message;
@@ -20,6 +20,9 @@ pub struct PdfViewer {
     pub zoom: f32,
     pub rendered_pages: Vec<RenderedPage>,
     pub synctex_highlight: Option<SynctexHighlight>,
+    /// Unscaled width (pixels at zoom=1.0) of the first page.
+    /// Set once on initial load, used by Fit to avoid dividing by a stale zoom.
+    pub base_page_width: Option<u32>,
 }
 
 #[derive(Debug, Clone)]
@@ -37,13 +40,14 @@ pub struct SynctexHighlight {
 }
 
 impl PdfViewer {
-    pub fn new() -> Self { PdfViewer { zoom: 1.0, ..Default::default() } }
+    pub fn new() -> Self { PdfViewer { zoom: 1.0, base_page_width: None, ..Default::default() } }
 
     pub fn load_pdf(&mut self, path: PathBuf) {
         self.pdf_path = Some(path);
         self.current_page = 0;
         self.rendered_pages.clear();
         self.synctex_highlight = None;
+        self.base_page_width = None; // will be set from first zoom=1.0 render
     }
 
     pub fn set_zoom(&mut self, z: f32) { self.zoom = z.clamp(0.25, 4.0); }
@@ -84,24 +88,33 @@ impl PdfViewer {
         let zoom_label = text(format!("{:.0}%", self.zoom * 100.0))
             .size(12u16).color(Palette::TEXT_DIM);
 
-        let pb = |label: &'static str, msg: Message| {
-            button(text(label).size(13u16))
-                .on_press(msg)
-                .style(crate::theme::ghost_button)
-                .padding([3u16, 8u16])
+        let tb = |label: &'static str, tip_str: &'static str, msg: Message|
+            -> Element<'_, Message>
+        {
+            tooltip(
+                button(text(label).size(13u16))
+                    .on_press(msg)
+                    .style(crate::theme::ghost_button)
+                    .padding([3u16, 8u16]),
+                container(text(tip_str).size(11u16).color(Palette::TEXT_PRIMARY))
+                    .padding([4u16, 8u16])
+                    .style(crate::theme::tooltip_box),
+                tooltip::Position::Bottom,
+            )
+            .into()
         };
 
         container(row![
-            pb("<", Message::PdfPrevPage),
+            tb("<",         "Previous Page",           Message::PdfPrevPage),
             page_info,
-            pb(">", Message::PdfNextPage),
+            tb(">",         "Next Page",               Message::PdfNextPage),
             Space::with_width(12),
-            pb("-", Message::PdfZoomOut),
+            tb("-",         "Zoom Out",                Message::PdfZoomOut),
             zoom_label,
-            pb("+", Message::PdfZoomIn),
-            pb("[.]", Message::PdfZoomFit),
+            tb("+",         "Zoom In",                 Message::PdfZoomIn),
+            tb("Fit",       "Fit Page to Panel Width", Message::PdfZoomFit),
             Space::with_width(Length::Fill),
-            pb("Recompile", Message::Compile),
+            tb("Recompile", "Recompile Document",      Message::Compile),
         ].spacing(4).align_y(Alignment::Center).padding([4u16, 8u16]))
         .width(Length::Fill).height(36)
         .style(crate::theme::toolbar)
@@ -122,13 +135,15 @@ impl PdfViewer {
             .into();
         }
 
-        let pages: Vec<Element<Message>> = self.rendered_pages.iter()
-            .map(|page| self.render_page(page))
-            .collect();
+        // Show only the current page (lazy rendering — other pages are re-rendered
+        // on demand when navigating, so there is no need to keep all in the DOM).
+        let page = &self.rendered_pages[self.current_page.min(self.rendered_pages.len() - 1)];
 
         scrollable(
-            container(column(pages).spacing(12).align_x(Alignment::Center))
-                .width(Length::Fill).padding(16u16)
+            container(self.render_page(page))
+                .width(Length::Fill)
+                .center_x(Length::Fill)
+                .padding(16u16)
         )
         .width(Length::Fill).height(Length::Fill)
         .style(crate::theme::dark_scroll)
@@ -196,15 +211,23 @@ pub async fn render_pdf_pages(
     pdf_path: &Path,
     zoom: f32,
 ) -> anyhow::Result<Vec<RenderedPage>> {
+    render_pdf_page_range(pdf_path, zoom, None).await
+}
+
+/// Render only a specific 1-based page range (inclusive).
+/// Pass None to render all pages.
+pub async fn render_pdf_page_range(
+    pdf_path: &Path,
+    zoom: f32,
+    page_range: Option<(u32, u32)>,
+) -> anyhow::Result<Vec<RenderedPage>> {
     use tokio::process::Command;
 
-    // DPI: standard 72dpi * zoom. pdftoppm default is 150dpi, we scale from 96.
     let dpi = (96.0 * zoom).round() as u32;
 
     let tmp = tempfile::tempdir()?;
     let out_prefix = tmp.path().join("page");
 
-    // Check which tool is available: pdftoppm (poppler) or gs (ghostscript)
     let tool = if which_cmd("pdftoppm").await { "pdftoppm" }
                else if which_cmd("gs").await   { "gs" }
                else {
@@ -217,57 +240,64 @@ pub async fn render_pdf_pages(
                };
 
     if tool == "pdftoppm" {
-        // pdftoppm -r <dpi> -png <input.pdf> <output-prefix>
-        // produces: <output-prefix>-01.png, -02.png, …
-        let status = Command::new("pdftoppm")
-            .args([
-                "-r", &dpi.to_string(),
-                "-png",
-                pdf_path.to_str().unwrap_or(""),
-                out_prefix.to_str().unwrap_or("page"),
-            ])
-            .status().await?;
+        let mut args = vec![
+            "-r".to_string(), dpi.to_string(),
+            "-png".to_string(),
+        ];
+        if let Some((first, last)) = page_range {
+            args.push("-f".to_string()); args.push(first.to_string());
+            args.push("-l".to_string()); args.push(last.to_string());
+        }
+        args.push(pdf_path.to_str().unwrap_or("").to_string());
+        args.push(out_prefix.to_str().unwrap_or("page").to_string());
 
+        let status = Command::new("pdftoppm")
+            .args(&args)
+            .status().await?;
         if !status.success() {
             anyhow::bail!("pdftoppm failed");
         }
     } else {
-        // Ghostscript fallback
-        let status = Command::new("gs")
-            .args([
-                "-dBATCH", "-dNOPAUSE", "-dQUIET",
-                "-sDEVICE=png16m",
-                &format!("-r{}", dpi),
-                &format!("-sOutputFile={}-%02d.png", out_prefix.display()),
-                pdf_path.to_str().unwrap_or(""),
-            ])
-            .status().await?;
+        // Ghostscript fallback — page range via -dFirstPage / -dLastPage
+        let mut args = vec![
+            "-dBATCH".to_string(), "-dNOPAUSE".to_string(), "-dQUIET".to_string(),
+            "-sDEVICE=png16m".to_string(),
+            format!("-r{}", dpi),
+            format!("-sOutputFile={}-%02d.png", out_prefix.display()),
+        ];
+        if let Some((first, last)) = page_range {
+            args.push(format!("-dFirstPage={}", first));
+            args.push(format!("-dLastPage={}", last));
+        }
+        args.push(pdf_path.to_str().unwrap_or("").to_string());
 
+        let status = Command::new("gs")
+            .args(&args)
+            .status().await?;
         if !status.success() {
             anyhow::bail!("ghostscript failed");
         }
     }
 
-    // Collect all produced PNG files in order
     let mut png_files: Vec<PathBuf> = std::fs::read_dir(tmp.path())?
         .filter_map(|e| e.ok())
         .map(|e| e.path())
         .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("png"))
         .collect();
-    png_files.sort(); // page-01.png, page-02.png … lexicographic = correct order
+    png_files.sort();
 
     if png_files.is_empty() {
-        anyhow::bail!("No pages rendered — PDF may be empty or corrupt");
+        anyhow::bail!("No pages rendered -- PDF may be empty or corrupt");
     }
 
+    let page_offset = page_range.map(|(f, _)| (f - 1) as usize).unwrap_or(0);
     let mut pages = Vec::with_capacity(png_files.len());
     for (i, png_path) in png_files.iter().enumerate() {
         let bytes = tokio::fs::read(png_path).await?;
-        // Decode PNG header to get width/height without a full decode library
         let (w, h) = png_dimensions(&bytes).unwrap_or((800, 1132));
         let handle = iced::widget::image::Handle::from_bytes(bytes);
         pages.push(RenderedPage {
-            page_number: i,
+            page_number: page_offset + i,
             width: w,
             height: h,
             handle: Some(handle),

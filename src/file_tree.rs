@@ -1,5 +1,5 @@
 use iced::{
-    widget::{button, column, container, row, scrollable, text, Space},
+    widget::{button, column, container, row, scrollable, text, tooltip, Space},
     Alignment, Color, Element, Length,
 };
 use std::collections::HashSet;
@@ -111,14 +111,22 @@ impl FileTree {
                 } else {
                     Message::SetMainFile(entry.path.clone())
                 };
-                let star_btn = button(text("[M]").size(11u16).color(star_color))
-                    .on_press(star_msg)
-                    .style(crate::theme::ghost_button)
-                    .padding([2u16, 6u16]);
-                row![
-                    label_btn,
-                    star_btn,
-                ].align_y(Alignment::Center).into()
+                let star_tip_str: &'static str = if is_main {
+                    "Main compile target"
+                } else {
+                    "Set as main compile target"
+                };
+                let star_btn = tooltip(
+                    button(text("[M]").size(11u16).color(star_color))
+                        .on_press(star_msg)
+                        .style(crate::theme::ghost_button)
+                        .padding([2u16, 6u16]),
+                    container(text(star_tip_str).size(11u16).color(Palette::TEXT_PRIMARY))
+                        .padding([4u16, 8u16])
+                        .style(crate::theme::tooltip_box),
+                    tooltip::Position::Left,
+                );
+                row![label_btn, star_btn].align_y(Alignment::Center).into()
             } else {
                 label_btn.into()
             };
