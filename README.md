@@ -1,6 +1,6 @@
 # ⊛ Ferroleaf
 
-A native Linux LaTeX editor built with **Rust + Iced**, featuring a warm **pink-brown dark theme**, real-time PDF preview, and full **SyncTeX** support — clicking any text in the PDF jumps your cursor directly to the corresponding LaTeX source.
+A native Linux LaTeX editor built with **Rust + Iced**, featuring a warm **pink-brown dark theme**, real-time PDF preview, and full **SyncTeX** support -- clicking any text in the PDF jumps your cursor directly to the corresponding LaTeX source.
 
 No Electron. No browser. No subscription. All features, always.
 
@@ -10,13 +10,13 @@ No Electron. No browser. No subscription. All features, always.
 
 | Feature | Details |
 |---|---|
-| **Native Iced UI** | Pure Rust, GPU-accelerated via wgpu — no Electron, no web runtime |
+| **Native Iced UI** | Pure Rust, GPU-accelerated via wgpu -- no Electron, no web runtime |
 | **Pink-brown dark theme** | Custom warm palette: deep browns, rose pinks, high-contrast text |
 | **PDF preview** | Side-by-side live PDF rendered via pdfium |
-| **SyncTeX (PDF→source)** | Click any text in the PDF — cursor jumps to the matching `.tex` line |
+| **SyncTeX (PDF→source)** | Click any text in the PDF -- cursor jumps to the matching `.tex` line |
 | **Multi-file projects** | Full project workspace, compiles the **main file** regardless of which tab is open |
 | **Intermediate file filtering** | `.aux`, `.log`, `.synctex.gz`, `.bbl` etc. are **never shown** in the file tree |
-| **Multiple compilers** | pdfLaTeX, XeLaTeX, LuaLaTeX — auto-detected from `$PATH` |
+| **Multiple compilers** | pdfLaTeX, XeLaTeX, LuaLaTeX -- auto-detected from `$PATH` |
 | **BibTeX support** | Optional BibTeX pass between LaTeX runs |
 | **Multi-pass compilation** | 1–3 LaTeX passes for TOC/refs/bibliography |
 | **Syntax highlighting** | Commands, math, comments, braces, keywords in distinct colors |
@@ -93,7 +93,7 @@ sudo apt-get install libpdfium-dev
 ## Usage
 
 ### Opening a project
-1. Launch Ferroleaf — the welcome screen appears
+1. Launch Ferroleaf -- the welcome screen appears
 2. Click **Open Project Folder** and select your LaTeX project directory
 3. Ferroleaf auto-detects `main.tex` (or whichever `.tex` file contains `\documentclass`)
 
@@ -228,4 +228,10 @@ Run `install.sh` which downloads JetBrains Mono automatically, or manually place
 
 ## License
 
-MIT License — use freely, modify freely, no strings attached.
+MIT License -- use freely, modify freely, no strings attached.
+
+Permission is hereby granted, without written agreement and without license or royalty fees, to use, copy, modify, and distribute this software and its documentation for any purpose, provided that the above copyright notice and the following two paragraphs appear in all copies of this software.
+
+IN NO EVENT SHALL ANY INSTITUTIONAL BOARD OF REGENTS BE LIABLE TO ANY PARTY FOR DIRECT, INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES ARISING OUT OF THE USE OF THIS SOFTWARE AND ITS DOCUMENTATION, EVEN IF THE ARIZONA BOARD OF REGENTS HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+ANY INSTITUTIONAL BOARD OF REGENTS SPECIFICALLY DISCLAIMS ANY WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. THE SOFTWARE PROVIDED HEREUNDER IS ON AN "AS IS" BASIS, AND THE ARIZONA BOARD OF REGENTS HAS NO OBLIGATION TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
