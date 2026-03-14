@@ -59,6 +59,41 @@ pub fn sidebar(_t: &Theme) -> container::Style {
     container_bg(Palette::BG_DARK)
 }
 
+/// Muted steel-blue used for the compiler log panel — clearly distinct from the
+/// warm-brown sidebar but dark enough to stay readable on the dark theme.
+pub const LOG_BG: Color = Color { r: 0.10, g: 0.17, b: 0.25, a: 1.0 };
+
+pub fn log_panel(_t: &Theme) -> container::Style {
+    container_bg(LOG_BG)
+}
+
+pub fn log_scroll(_t: &Theme, status: scrollable::Status) -> scrollable::Style {
+    let scroller_color = match status {
+        scrollable::Status::Hovered { .. } | scrollable::Status::Dragged { .. } => Palette::PINK_DIM,
+        _ => Color { r: 0.25, g: 0.40, b: 0.55, a: 1.0 },
+    };
+    scrollable::Style {
+        container: container_bg(LOG_BG),
+        vertical_rail: scrollable::Rail {
+            background: Some(Background::Color(LOG_BG)),
+            border: Border { radius: 4.0.into(), ..Default::default() },
+            scroller: scrollable::Scroller {
+                color: scroller_color,
+                border: Border { radius: 4.0.into(), ..Default::default() },
+            },
+        },
+        horizontal_rail: scrollable::Rail {
+            background: Some(Background::Color(LOG_BG)),
+            border: Border { radius: 4.0.into(), ..Default::default() },
+            scroller: scrollable::Scroller {
+                color: scroller_color,
+                border: Border { radius: 4.0.into(), ..Default::default() },
+            },
+        },
+        gap: None,
+    }
+}
+
 pub fn toolbar(_t: &Theme) -> container::Style {
     container_bg(Palette::BG_DARKEST)
 }

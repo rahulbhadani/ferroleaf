@@ -3,6 +3,7 @@ mod dialog;
 mod compiler;
 mod editor;
 mod file_tree;
+mod icons;
 mod pdf_viewer;
 mod project;
 mod synctex;

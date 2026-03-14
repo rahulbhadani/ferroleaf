@@ -6,7 +6,7 @@ use walkdir::WalkDir;
 const HIDDEN_EXT: &[&str] = &[
     "aux","log","out","toc","lof","lot","bbl","blg","fls","fdb_latexmk",
     "idx","ilg","ind","ist","glo","gls","glg","acn","acr","alg","xdy",
-    "run.xml","bcf","nav","snm","vrb","dvi","ps","tdo",
+    "bcf","nav","snm","vrb","dvi","ps","tdo","xdv","synctex",
 ];
 
 #[derive(Debug, Clone)]
@@ -172,8 +172,18 @@ fn find_main(root: &Path) -> Option<PathBuf> {
 }
 
 fn should_show(path: &Path) -> bool {
-    // Hide .synctex.gz (extension would just be "gz" so check full name too)
-    if path.to_string_lossy().ends_with(".synctex.gz") { return false; }
+    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+    // Hide all .synctex and .synctex.gz files
+    if name.ends_with(".synctex") || name.ends_with(".synctex.gz") { return false; }
+
+    // Hide compound LaTeX intermediate extensions (e.g. main.run.xml)
+    if name.ends_with(".run.xml") { return false; }
+
+    // Hide editor backup files
+    if name.ends_with(".tex.bak") { return false; }
+
+    // Hide by simple extension
     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
         if HIDDEN_EXT.iter().any(|h| *h == ext.to_lowercase()) { return false; }
     }
@@ -199,6 +209,8 @@ fn collect(dir: &Path, out: &mut Vec<FileEntry>, depth: usize, main: &Option<Pat
         let path = item.path().to_path_buf();
         let name = item.file_name().to_string_lossy().to_string();
         if name.starts_with('.') || name == "target" { continue; }
+        // Hide minted temp directories (created by the minted LaTeX package)
+        if item.file_type().is_dir() && name.starts_with("_minted") { continue; }
 
         if item.file_type().is_dir() {
             out.push(FileEntry { path: path.clone(), name, depth, is_dir: true, is_main: false });

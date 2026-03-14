@@ -5,16 +5,16 @@ use iced::{
     keyboard, mouse,
     widget::{
         button, column, container, horizontal_rule, row, scrollable,
-        stack, text, text_editor, text_input, Space,
+        stack, svg, text, text_editor, text_input, Space,
     },
-    Alignment, Color, Element, Event, Font, Length, Subscription, Task, Theme,
+    Alignment, Element, Event, Font, Length, Subscription, Task, Theme,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
 use crate::compiler::{CompileOptions, CompileStatus, Compiler, CompilerKind, DiagnosticLevel};
-use crate::editor::{tab_bar, EditorState};
+use crate::editor::{tab_bar, EditorState, LatexHighlighter, LatexHighlightSettings, latex_highlight_format};
 use crate::file_tree::FileTree;
 use crate::pdf_viewer::PdfViewer;
 use crate::project::{Project, ProjectSettings};
@@ -116,6 +116,8 @@ pub struct Ferroleaf {
     /// Approximate window dimensions — used for context-menu clamping.
     window_width: f32,
     window_height: f32,
+    /// Guard against opening a second native dialog while one is already open.
+    dialog_open: bool,
 }
 
 impl Ferroleaf {
@@ -137,6 +139,7 @@ impl Ferroleaf {
             mouse_pos: (0.0, 0.0),
             open_menu: None, context_menu: None,
             window_width: 1440.0, window_height: 900.0,
+            dialog_open: false,
         }, Task::none())
     }
 
@@ -146,24 +149,33 @@ impl Ferroleaf {
             // Use native Linux dialog tools (zenity / kdialog / yad / python3-gi).
             // These are spawned as child processes — no GTK main-loop needed,
             // works on both X11 and Wayland from any thread.
-            Message::OpenProject => return Task::perform(
-                crate::dialog::pick_folder("Open LaTeX Project Folder"),
-                Message::ProjectOpened,
-            ),
+            Message::OpenProject => {
+                if self.dialog_open { return Task::none(); }
+                self.dialog_open = true;
+                return Task::perform(
+                    crate::dialog::pick_folder("Open LaTeX Project Folder"),
+                    Message::ProjectOpened,
+                );
+            }
 
-            Message::NewProject => return Task::perform(
-                crate::dialog::pick_folder("New Project — Choose Folder"),
-                |opt_path| match opt_path {
-                    Some(path) => {
-                        let main = path.join("main.tex");
-                        if !main.exists() { let _ = std::fs::write(&main, TEMPLATE_ARTICLE); }
-                        Message::ProjectOpened(Some(path))
-                    }
-                    None => Message::Noop,
-                },
-            ),
+            Message::NewProject => {
+                if self.dialog_open { return Task::none(); }
+                self.dialog_open = true;
+                return Task::perform(
+                    crate::dialog::pick_folder("New Project — Choose Folder"),
+                    |opt_path| match opt_path {
+                        Some(path) => {
+                            let main = path.join("main.tex");
+                            if !main.exists() { let _ = std::fs::write(&main, TEMPLATE_ARTICLE); }
+                            Message::ProjectOpened(Some(path))
+                        }
+                        None => Message::ProjectOpened(None),
+                    },
+                );
+            }
 
             Message::ProjectOpened(Some(path)) => {
+                self.dialog_open = false;
                 let mut project = Project::new(path.clone());
                 let settings = ProjectSettings::load(&project.root);
                 if let Some(ref mf) = settings.main_file {
@@ -182,6 +194,7 @@ impl Ferroleaf {
                 if let Some(f) = mf { return self.update(Message::OpenFile(f)); }
             }
             Message::ProjectOpened(None) => {
+                self.dialog_open = false;
                 self.set_status("No folder selected".into(), StatusKind::Info);
             }
 
@@ -618,27 +631,36 @@ impl Ferroleaf {
     // ── View helpers ──────────────────────────────────────────────────────────
 
     fn view_toolbar(&self) -> Element<Message> {
-        let cbl = if self.compile_status.is_running() { "→  Compiling…" } else { "▶  Compile" };
-        // Icon colors — each toolbar action gets its own distinct hue.
-        const TEAL:   Color = Color { r: 0.35, g: 0.85, b: 0.78, a: 1.0 };
-        const LIME:   Color = Color { r: 0.50, g: 0.90, b: 0.42, a: 1.0 };
-        const VIOLET: Color = Color { r: 0.72, g: 0.52, b: 0.96, a: 1.0 };
-        const ORANGE: Color = Color { r: 0.96, g: 0.60, b: 0.22, a: 1.0 };
+        let compiling = self.compile_status.is_running();
+        let compile_icon = if compiling {
+            crate::icons::COMPILING
+        } else {
+            crate::icons::COMPILE
+        };
+        let compile_label = if compiling { " Compiling…" } else { " Compile" };
+
         container(row![
-            container(text("# Ferroleaf").size(15).color(Palette::PINK_BRIGHT))
-                .padding([0u16, 12u16]),
-            cib("≡", Message::ToggleSidebar,  Palette::WARNING),
-            cib("Dir", Message::OpenProject,   TEAL),
-            cib("+", Message::NewFile,        LIME),
-            cib("Cfg", Message::ShowSettings,  VIOLET),
+            container(text("Ferroleaf").size(14).color(Palette::PINK_BRIGHT))
+                .padding([0u16, 14u16]),
+            svg_btn(crate::icons::SIDEBAR,      Message::ToggleSidebar, 20),
+            svg_btn(crate::icons::OPEN_FOLDER,  Message::OpenProject,   20),
+            svg_btn(crate::icons::NEW_FILE,     Message::NewFile,       20),
+            svg_btn(crate::icons::SETTINGS,     Message::ShowSettings,  20),
             Space::with_width(Length::Fill),
-            cib("Log", Message::ToggleLogPanel, ORANGE),
-            button(text(cbl).size(13))
-                .on_press(Message::Compile)
-                .style(crate::theme::primary_button)
-                .padding([5u16, 14u16]),
+            svg_btn(crate::icons::LOG,          Message::ToggleLogPanel, 20),
+            // Compile button: SVG icon + text label
+            button(
+                row![
+                    svg(svg::Handle::from_memory(compile_icon))
+                        .width(16).height(16),
+                    text(compile_label).size(13),
+                ].spacing(6).align_y(Alignment::Center)
+            )
+            .on_press(Message::Compile)
+            .style(crate::theme::primary_button)
+            .padding([5u16, 14u16]),
             Space::with_width(8),
-        ].spacing(2).align_y(Alignment::Center).height(42))
+        ].spacing(4).align_y(Alignment::Center).height(42))
         .width(Length::Fill)
         .style(crate::theme::toolbar)
         .into()
@@ -714,8 +736,12 @@ impl Ferroleaf {
                         text_editor(&state.content)
                             .on_action(Message::EditorAction)
                             .font(Font::MONOSPACE)
-                            .size(font_size)        // u16 — satisfies Into<Pixels>
+                            .size(font_size)
                             .style(crate::theme::code_editor)
+                            .highlight_with::<LatexHighlighter>(
+                                LatexHighlightSettings,
+                                latex_highlight_format,
+                            )
                             .height(Length::Fill)
                     ).width(Length::Fill).padding([4u16, 4u16]),
                 ].spacing(0))
@@ -771,28 +797,28 @@ impl Ferroleaf {
 
         let items: Vec<Element<Message>> = match menu {
             MenuKind::File => vec![
-                dmi("~  New Project",           Message::NewProject),
-                dmi("~  Open Project   Ctrl+O", Message::OpenProject),
+                dmi("New Project",           Message::NewProject),
+                dmi("Open Project  Ctrl+O",  Message::OpenProject),
                 dms(),
-                dmi("+  New File       Ctrl+N", Message::NewFile),
-                dmi("Save       Ctrl+S", Message::SaveFile),
-                dmi("Save All   Ctrl+S+S",Message::SaveAll),
-                dmi("✕  Close Tab",             Message::CloseActiveTab),
+                dmi("New File      Ctrl+N",  Message::NewFile),
+                dmi("Save          Ctrl+S",  Message::SaveFile),
+                dmi("Save All      Ctrl+S+S",Message::SaveAll),
+                dmi("Close Tab",             Message::CloseActiveTab),
                 dms(),
-                dmi("*  Settings",              Message::ShowSettings),
+                dmi("Settings",              Message::ShowSettings),
                 dms(),
-                dmi("✗  Quit",                  Message::Quit),
+                dmi("Quit",                  Message::Quit),
             ],
             MenuKind::Edit => vec![
-                dmi("←  Undo      Ctrl+Z", Message::Noop),
-                dmi("→  Redo      Ctrl+Y", Message::Noop),
+                dmi("Undo         Ctrl+Z",   Message::Noop),
+                dmi("Redo         Ctrl+Y",   Message::Noop),
                 dms(),
-                dmi("✂  Cut       Ctrl+X", Message::Noop),
-                dmi("[]  Copy      Ctrl+C", Message::Noop),
-                dmi("[.]  Paste     Ctrl+V", Message::Noop),
-                dmi("≡  Select All  Ctrl+A", Message::SelectAll),
+                dmi("Cut          Ctrl+X",   Message::Noop),
+                dmi("Copy         Ctrl+C",   Message::Noop),
+                dmi("Paste        Ctrl+V",   Message::Noop),
+                dmi("Select All   Ctrl+A",   Message::SelectAll),
                 dms(),
-                dmi("%  Comment/Uncomment Line", Message::CommentLine),
+                dmi("Comment / Uncomment Line", Message::CommentLine),
             ],
             MenuKind::Build => {
                 let c = &self.compile_options.compiler;
@@ -813,20 +839,20 @@ impl Ferroleaf {
                 ]
             },
             MenuKind::View => vec![
-                dmcheck("Sidebar     Ctrl+\\", self.sidebar_visible,   Message::ToggleSidebar),
-                dmcheck("Log Panel",           self.log_panel_visible,  Message::ToggleLogPanel),
+                dmcheck("Sidebar      Ctrl+\\", self.sidebar_visible,  Message::ToggleSidebar),
+                dmcheck("Log Panel",             self.log_panel_visible, Message::ToggleLogPanel),
                 dms(),
-                dmi("+  Zoom In",   Message::PdfZoomIn),
-                dmi("-  Zoom Out",  Message::PdfZoomOut),
-                dmi("[.]  Fit Page",  Message::PdfZoomFit),
+                dmi("Zoom In",    Message::PdfZoomIn),
+                dmi("Zoom Out",   Message::PdfZoomOut),
+                dmi("Fit Page",   Message::PdfZoomFit),
                 dms(),
-                dmi("◂  Prev Page", Message::PdfPrevPage),
-                dmi("▸  Next Page", Message::PdfNextPage),
+                dmi("Prev Page",  Message::PdfPrevPage),
+                dmi("Next Page",  Message::PdfNextPage),
             ],
             MenuKind::Help => vec![
-                dmi("kb  Keyboard Shortcuts", Message::ShowKeyboardShortcuts),
+                dmi("Keyboard Shortcuts", Message::ShowKeyboardShortcuts),
                 dms(),
-                dmi("(i) About Ferroleaf",    Message::About),
+                dmi("About Ferroleaf",    Message::About),
             ],
         };
 
@@ -852,34 +878,34 @@ impl Ferroleaf {
     fn view_context_menu_overlay(&self, ctx: &ContextMenuState) -> Element<'_, Message> {
         let items: Vec<Element<Message>> = match ctx.kind {
             ContextMenuKind::Editor => vec![
-                dmi("←  Undo",           Message::Noop),
-                dmi("→  Redo",           Message::Noop),
+                dmi("Undo",                        Message::Noop),
+                dmi("Redo",                        Message::Noop),
                 dms(),
-                dmi("✂  Cut",            Message::Noop),
-                dmi("[]  Copy",           Message::Noop),
-                dmi("[.]  Paste",          Message::Noop),
-                dmi("≡  Select All",     Message::SelectAll),
+                dmi("Cut",                         Message::Noop),
+                dmi("Copy",                        Message::Noop),
+                dmi("Paste",                       Message::Noop),
+                dmi("Select All",                  Message::SelectAll),
                 dms(),
-                dmi("%  Comment / Uncomment Line", Message::CommentLine),
+                dmi("Comment / Uncomment Line",    Message::CommentLine),
                 dms(),
-                dmi("▶  Compile  Ctrl+B", Message::Compile),
+                dmi("Compile   Ctrl+B",            Message::Compile),
             ],
             ContextMenuKind::PdfViewer => {
                 let page = self.pdf_viewer.current_page;
                 let (pw, ph) = (ctx.page_w, ctx.page_h);
                 vec![
-                    dmi("-> Jump to Source", Message::SynctexAt {
+                    dmi("Jump to Source (SyncTeX)", Message::SynctexAt {
                         page, x: ctx.x, y: ctx.y, page_w: pw, page_h: ph,
                     }),
                     dms(),
-                    dmi("+  Zoom In",   Message::PdfZoomIn),
-                    dmi("-  Zoom Out",  Message::PdfZoomOut),
-                    dmi("[.]  Fit Page",  Message::PdfZoomFit),
+                    dmi("Zoom In",    Message::PdfZoomIn),
+                    dmi("Zoom Out",   Message::PdfZoomOut),
+                    dmi("Fit Page",   Message::PdfZoomFit),
                     dms(),
-                    dmi("◂  Prev Page", Message::PdfPrevPage),
-                    dmi("▸  Next Page", Message::PdfNextPage),
+                    dmi("Prev Page",  Message::PdfPrevPage),
+                    dmi("Next Page",  Message::PdfNextPage),
                     dms(),
-                    dmi("↻  Recompile", Message::Compile),
+                    dmi("Recompile",  Message::Compile),
                 ]
             },
         };
@@ -934,7 +960,7 @@ impl Ferroleaf {
             row![
                 text("Compiler Log").size(12).color(Palette::TEXT_DIM),
                 Space::with_width(Length::Fill),
-                ib("Clr", Message::ClearLog),
+                ib("Clear", Message::ClearLog),
                 ib("✕", Message::ToggleLogPanel),
             ].align_y(Alignment::Center).padding([4u16, 8u16]),
             horizontal_rule(1).style(crate::theme::subtle_rule),
@@ -944,10 +970,10 @@ impl Ferroleaf {
                 text(&self.compile_log).size(11u16).font(Font::MONOSPACE).color(Palette::TEXT_DIM),
             ].padding([4u16, 8u16]))
             .height(Length::Fill)
-            .style(crate::theme::dark_scroll),
+            .style(crate::theme::log_scroll),
         ].spacing(0))
         .width(Length::Fill)
-        .style(crate::theme::sidebar)
+        .style(crate::theme::log_panel)
         .into()
     }
 
@@ -1097,13 +1123,18 @@ fn ib(icon: &'static str, msg: Message) -> Element<'static, Message> {
         .into()
 }
 
-/// Colored icon button — bigger than the old `ib`, with a per-icon accent color.
-fn cib(icon: &'static str, msg: Message, color: Color) -> Element<'static, Message> {
-    button(text(icon).size(18u16).color(color))
-        .on_press(msg)
-        .style(crate::theme::icon_button)
-        .padding([4u16, 10u16])
-        .into()
+/// SVG icon button for the toolbar.
+fn svg_btn(data: &'static [u8], msg: Message, size: u16) -> Element<'static, Message> {
+    let handle = svg::Handle::from_memory(data);
+    button(
+        svg(handle)
+            .width(Length::Fixed(size as f32))
+            .height(Length::Fixed(size as f32))
+    )
+    .on_press(msg)
+    .style(crate::theme::icon_button)
+    .padding([5u16, 8u16])
+    .into()
 }
 
 /// Menu / context-menu item button.
