@@ -6,7 +6,7 @@ success() { echo -e "${GREEN}${BOLD}[✔]${RESET} $*"; }
 warn()    { echo -e "${YELLOW}${BOLD}[⚠]${RESET} $*"; }
 error()   { echo -e "${RED}${BOLD}[✖]${RESET} $*"; exit 1; }
 
-# ── Rust ──────────────────────────────────────────────────────────────────────
+#  Rust 
 if ! command -v cargo &>/dev/null; then
     info "Installing Rust via rustup…"
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -14,7 +14,7 @@ if ! command -v cargo &>/dev/null; then
 fi
 success "Rust: $(rustc --version)"
 
-# ── Package manager ───────────────────────────────────────────────────────────
+#  Package manager 
 if   command -v apt-get &>/dev/null; then PKG=apt
 elif command -v dnf     &>/dev/null; then PKG=dnf
 elif command -v pacman  &>/dev/null; then PKG=pacman
@@ -28,7 +28,7 @@ try_install() {
     esac
 }
 
-# ── Build deps ────────────────────────────────────────────────────────────────
+#  Build deps 
 info "Installing build dependencies…"
 case $PKG in
     apt)    sudo apt-get install -y build-essential pkg-config libssl-dev libgtk-3-dev \
@@ -39,7 +39,7 @@ case $PKG in
                 libxcb xkbcommon vulkan-icd-loader 2>/dev/null || true ;;
 esac
 
-# ── Folder dialog tool ────────────────────────────────────────────────────────
+#  Folder dialog tool 
 info "Checking folder dialog tool (zenity/kdialog)…"
 if ! command -v zenity &>/dev/null && ! command -v kdialog &>/dev/null; then
     info "Installing zenity…"
@@ -49,7 +49,7 @@ else
     success "Dialog tool: $(command -v zenity || command -v kdialog)"
 fi
 
-# ── PDF renderer (poppler-utils) ──────────────────────────────────────────────
+#  PDF renderer (poppler-utils) 
 info "Checking PDF renderer (pdftoppm)…"
 if ! command -v pdftoppm &>/dev/null; then
     info "Installing poppler-utils…"
@@ -59,7 +59,7 @@ else
     success "PDF renderer: $(command -v pdftoppm)"
 fi
 
-# ── LaTeX ─────────────────────────────────────────────────────────────────────
+#  LaTeX 
 info "Checking LaTeX…"
 if command -v pdflatex &>/dev/null || command -v xelatex &>/dev/null; then
     success "LaTeX: $(command -v pdflatex || command -v xelatex)"
@@ -73,7 +73,7 @@ else
     esac
 fi
 
-# ── synctex ───────────────────────────────────────────────────────────────────
+#  synctex 
 info "Checking synctex…"
 if ! command -v synctex &>/dev/null; then
     try_install synctex || try_install texlive-binextra || try_install texlive-synctex || \
@@ -83,7 +83,7 @@ else
     success "synctex: $(command -v synctex)"
 fi
 
-# ── Fonts ─────────────────────────────────────────────────────────────────────
+#  Fonts 
 info "Setting up fonts…"
 mkdir -p assets/fonts
 FONT_OK=false
@@ -138,12 +138,12 @@ else
     fi
 fi
 
-# ── Build ─────────────────────────────────────────────────────────────────────
+#  Build 
 info "Building Ferroleaf (release)…"
 cargo build --release 2>&1 && success "Build complete: target/release/ferroleaf" \
     || error "Build failed"
 
-# ── Install ───────────────────────────────────────────────────────────────────
+#  Install 
 echo ""
 read -p "$(echo -e "${PINK}${BOLD}Install to /usr/local/bin? [y/N]${RESET} ")" -n 1 -r; echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
