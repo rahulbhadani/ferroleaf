@@ -220,14 +220,47 @@ pub fn latex_highlight_format(
 pub struct EditorState {
     pub content: text_editor::Content,
     pub path: PathBuf,
+    /// Undo history: each entry is the full document text before an edit.
+    undo_stack: Vec<String>,
+    /// Redo history: rebuilt when undo is called.
+    redo_stack: Vec<String>,
 }
 
 impl EditorState {
     pub fn new(path: PathBuf, text: &str) -> Self {
-        EditorState { content: text_editor::Content::with_text(text), path }
+        EditorState {
+            content: text_editor::Content::with_text(text),
+            path,
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
+        }
     }
     pub fn text(&self) -> String { self.content.text() }
     pub fn cursor_position(&self) -> (usize, usize) { self.content.cursor_position() }
+
+    /// Call before any edit that should be undoable.
+    pub fn snapshot(&mut self) {
+        let t = self.text();
+        // Don't push duplicate snapshots.
+        if self.undo_stack.last().map(|s| s == &t).unwrap_or(false) { return; }
+        self.undo_stack.push(t);
+        // Committing a new edit clears the redo stack.
+        self.redo_stack.clear();
+    }
+
+    pub fn undo(&mut self) {
+        if let Some(prev) = self.undo_stack.pop() {
+            self.redo_stack.push(self.text());
+            self.content = text_editor::Content::with_text(&prev);
+        }
+    }
+
+    pub fn redo(&mut self) {
+        if let Some(next) = self.redo_stack.pop() {
+            self.undo_stack.push(self.text());
+            self.content = text_editor::Content::with_text(&next);
+        }
+    }
     /// Move the editor cursor to the given 1-based line number.
     ///
     /// iced 0.13 has no direct "scroll to line" API, but Content::perform
@@ -311,21 +344,31 @@ pub fn gutter_scroll_id() -> scrollable::Id {
     scrollable::Id::new("line_gutter_scroll")
 }
 
-pub fn line_gutter(line_count: usize, font_size: u16) -> Element<'static, Message> {
-    // iced uses LineHeight::Relative(1.3) by default.  Each number row must be
-    // exactly this height so the gutter aligns with text_editor rows.
+pub fn line_gutter(line_count: usize, font_size: u16, cursor_line: usize) -> Element<'static, Message> {
+    // iced uses LineHeight::Relative(1.3) by default. Each row must match exactly.
     let line_h = (font_size as f32 * 1.3).round();
 
     let numbers: Vec<Element<Message>> = (1..=(line_count.max(1)))
         .map(|n| {
+            let is_active = (n - 1) == cursor_line;
+            let num_color = if is_active { Palette::PINK_BRIGHT } else { Palette::TEXT_DIM };
+            // Subtle warm highlight on the active line
+            let bg_color = iced::Color { r: 0.28, g: 0.19, b: 0.18, a: 1.0 };
+            let row_style = move |_t: &iced::Theme| iced::widget::container::Style {
+                background: if is_active {
+                    Some(iced::Background::Color(bg_color))
+                } else { None },
+                ..Default::default()
+            };
             container(
                 text(format!("{:>4}", n))
                     .size(font_size.saturating_sub(2))
                     .font(Font::MONOSPACE)
-                    .color(Palette::TEXT_DIM)
+                    .color(num_color)
             )
             .width(Length::Fill)
             .height(Length::Fixed(line_h))
+            .style(row_style)
             .into()
         })
         .collect();

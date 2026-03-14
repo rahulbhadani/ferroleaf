@@ -52,6 +52,12 @@ pub enum Message {
     /// Mouse wheel scrolled — used to keep the line-number gutter in sync
     /// with the text_editor's internal scroll position.
     EditorWheelScrolled(mouse::ScrollDelta),
+    EditorUndo, EditorRedo,
+    EditorCut, EditorCopy, EditorPaste,
+    CloseWelcome,
+    // PDF tabs
+    SwitchPdfTab(usize),
+    ClosePdfTab(usize),
     SaveFile, SaveAll, SearchChanged(String),
     Compile,
     CompileStatusUpdate(Arc<CompileStatus>),
@@ -98,7 +104,10 @@ pub struct Ferroleaf {
     project: Option<Project>,
     file_tree: FileTree,
     editor_states: std::collections::HashMap<PathBuf, EditorState>,
-    pdf_viewer: PdfViewer,
+    /// One PdfViewer per open PDF tab.
+    pdf_viewers: Vec<PdfViewer>,
+    /// Index into pdf_viewers of the currently visible tab.
+    active_pdf_idx: usize,
     compile_status: CompileStatus,
     compile_options: CompileOptions,
     compile_log: String,
@@ -138,7 +147,9 @@ impl Ferroleaf {
         } else { None };
         let state = Ferroleaf {
             project: None, file_tree: Default::default(),
-            editor_states: Default::default(), pdf_viewer: PdfViewer::new(),
+            editor_states: Default::default(),
+            pdf_viewers: vec![PdfViewer::new()],
+            active_pdf_idx: 0,
             compile_status: CompileStatus::Idle,
             compile_options: CompileOptions::default(), compile_log: String::new(),
             sidebar_visible: true, log_panel_visible: false,
@@ -158,6 +169,16 @@ impl Ferroleaf {
             .and_then(iced::window::get_size)
             .map(|size| Message::WindowResized(size.width, size.height));
         (state, size_task)
+    }
+
+
+    /// Borrow the active PDF viewer.
+    fn active_pdf(&self) -> &PdfViewer {
+        &self.pdf_viewers[self.active_pdf_idx]
+    }
+    /// Mutably borrow the active PDF viewer.
+    fn active_pdf_mut(&mut self) -> &mut PdfViewer {
+        &mut self.pdf_viewers[self.active_pdf_idx]
     }
 
     //  Update 
@@ -303,6 +324,7 @@ impl Ferroleaf {
                     if let Some(active) = project.active_file.clone() {
                         if let Some(state) = self.editor_states.get_mut(&active) {
                             let is_edit = action.is_edit();
+                            if is_edit { state.snapshot(); }
                             state.content.perform(action);
                             if is_edit { let t = state.text(); project.update_content(&active, t); }
                         }
@@ -395,9 +417,18 @@ impl Ferroleaf {
                                 format!("Done in {:.1}s : {} err, {} warn", r.duration.as_secs_f32(), ne, nw),
                                 if ne == 0 { StatusKind::Success } else { StatusKind::Warning },
                             );
-                            self.pdf_viewer.load_pdf(path.clone());
-                            // Request a fit-to-width on the very next render.
-                            // This flag is checked (and cleared) in PdfPagesRendered.
+                            // Find existing tab for this PDF path, or open a new one.
+                            let tab_idx = self.pdf_viewers.iter().position(|v| v.pdf_path.as_ref() == Some(&path));
+                            let idx = if let Some(i) = tab_idx {
+                                self.pdf_viewers[i].load_pdf(path.clone());
+                                i
+                            } else {
+                                let mut v = PdfViewer::new();
+                                v.load_pdf(path.clone());
+                                self.pdf_viewers.push(v);
+                                self.pdf_viewers.len() - 1
+                            };
+                            self.active_pdf_idx = idx;
                             self.pdf_fit_on_next_render = true;
                             return Task::perform(async move {
                                 // Render at zoom=1.0; PdfPagesRendered will rerender at fit zoom.
@@ -426,25 +457,25 @@ impl Ferroleaf {
 
             Message::PdfPagesRendered(pages) => {
                 // Always a full render now (all pages). Store and optionally auto-fit.
-                self.pdf_viewer.total_pages = pages.len();
+                self.active_pdf_mut().total_pages = pages.len();
                 // Capture unscaled page width once, from the initial zoom=1.0 render.
                 if self.pdf_fit_on_next_render {
                     if let Some(first) = pages.first() {
-                        self.pdf_viewer.base_page_width = Some(first.width);
+                        self.active_pdf_mut().base_page_width = Some(first.width);
                     }
                 }
-                self.pdf_viewer.rendered_pages = pages;
+                self.active_pdf_mut().rendered_pages = pages;
 
                 if self.pdf_fit_on_next_render {
                     self.pdf_fit_on_next_render = false;
                     let sidebar_w   = if self.sidebar_visible { 220.0_f32 } else { 0.0 };
                     let pdf_panel_w = (self.window_width - sidebar_w)
                         * (1.0 - self.split_ratio) - 48.0;
-                    let base_page_w = self.pdf_viewer.base_page_width
+                    let base_page_w = self.active_pdf().base_page_width
                         .map(|w| w as f32).unwrap_or(794.0);
                     if base_page_w > 0.0 && pdf_panel_w > 0.0 {
                         let fit_zoom = (pdf_panel_w / base_page_w).clamp(0.25, 4.0);
-                        self.pdf_viewer.set_zoom(fit_zoom);
+                        self.active_pdf_mut().set_zoom(fit_zoom);
                         // Re-render at fit zoom. Flag is false so no loop.
                         return self.rerender_pdf();
                     }
@@ -471,23 +502,23 @@ impl Ferroleaf {
                 }
             }
             Message::PdfNextPage => {
-                self.pdf_viewer.next_page();
-                let offset = self.pdf_viewer.scroll_offset_for_page(self.pdf_viewer.current_page);
+                self.active_pdf_mut().next_page();
+                let offset = self.active_pdf().scroll_offset_for_page(self.active_pdf().current_page);
                 return scrollable::scroll_to(
                     crate::pdf_viewer::pdf_scroll_id(),
                     scrollable::AbsoluteOffset { x: 0.0, y: offset },
                 );
             }
             Message::PdfPrevPage => {
-                self.pdf_viewer.prev_page();
-                let offset = self.pdf_viewer.scroll_offset_for_page(self.pdf_viewer.current_page);
+                self.active_pdf_mut().prev_page();
+                let offset = self.active_pdf().scroll_offset_for_page(self.active_pdf().current_page);
                 return scrollable::scroll_to(
                     crate::pdf_viewer::pdf_scroll_id(),
                     scrollable::AbsoluteOffset { x: 0.0, y: offset },
                 );
             }
-            Message::PdfZoomIn  => { self.pdf_viewer.zoom_in();  return self.rerender_pdf(); }
-            Message::PdfZoomOut => { self.pdf_viewer.zoom_out(); return self.rerender_pdf(); }
+            Message::PdfZoomIn  => { self.active_pdf_mut().zoom_in();  return self.rerender_pdf(); }
+            Message::PdfZoomOut => { self.active_pdf_mut().zoom_out(); return self.rerender_pdf(); }
             Message::PdfZoomFit  => {
                 let sidebar_w   = if self.sidebar_visible { 220.0_f32 } else { 0.0 };
                 let pdf_panel_w = (self.window_width - sidebar_w)
@@ -495,12 +526,12 @@ impl Ferroleaf {
                     - 48.0;
                 // Use the stable unscaled page width captured at zoom=1.0.
                 // Never derive from current rendered width (which varies with zoom).
-                let base_page_w = self.pdf_viewer.base_page_width
+                let base_page_w = self.active_pdf().base_page_width
                     .map(|w| w as f32)
                     .unwrap_or(794.0);
                 if base_page_w > 0.0 && pdf_panel_w > 0.0 {
                     let fit_zoom = (pdf_panel_w / base_page_w).clamp(0.25, 4.0);
-                    self.pdf_viewer.set_zoom(fit_zoom);
+                    self.active_pdf_mut().set_zoom(fit_zoom);
                     return self.rerender_pdf();
                 }
             }
@@ -553,6 +584,8 @@ impl Ferroleaf {
                         keyboard::Key::Character("s") if mods.shift() => { return self.update(Message::SaveAll); }
                         keyboard::Key::Character("s")  => { return self.update(Message::SaveFile); }
                         keyboard::Key::Character("b")  => { return self.update(Message::Compile); }
+                        keyboard::Key::Character("z")  => { return self.update(Message::EditorUndo); }
+                        keyboard::Key::Character("y")  => { return self.update(Message::EditorRedo); }
                         keyboard::Key::Character("\\") => self.sidebar_visible = !self.sidebar_visible,
                         keyboard::Key::Character("n")  => { return self.update(Message::NewFile); }
                         keyboard::Key::Character("o")  => { return self.update(Message::OpenProject); }
@@ -590,15 +623,15 @@ impl Ferroleaf {
                 // Show PDF context menu only when cursor is clearly inside the
                 // PDF pane AND a PDF has been rendered.
                 let kind = if mx > editor_end
-                    && self.pdf_viewer.pdf_path.is_some()
-                    && !self.pdf_viewer.rendered_pages.is_empty()
+                    && self.active_pdf().pdf_path.is_some()
+                    && !self.active_pdf().rendered_pages.is_empty()
                 {
                     ContextMenuKind::PdfViewer
                 } else {
                     ContextMenuKind::Editor
                 };
-                let (pw, ph) = self.pdf_viewer.rendered_pages
-                    .get(self.pdf_viewer.current_page)
+                let (pw, ph) = self.active_pdf().rendered_pages
+                    .get(self.active_pdf().current_page)
                     .map(|p| (p.width as f32, p.height as f32))
                     .unwrap_or((595.0, 842.0));
                 self.context_menu = Some(ContextMenuState {
@@ -631,6 +664,7 @@ impl Ferroleaf {
                     .and_then(|p| p.active_file.clone());
                 if let Some(active) = active_path {
                     if let Some(state) = self.editor_states.get_mut(&active) {
+                        state.snapshot();
                         let (line_idx, _) = state.cursor_position();
                         let src = state.text();
                         if let Some(line_content) = src.lines().nth(line_idx) {
@@ -680,6 +714,69 @@ impl Ferroleaf {
                 );
             }
             Message::ShowKeyboardShortcuts => { self.modal = Modal::WelcomeScreen; }
+
+            Message::CloseWelcome => { self.modal = Modal::None; }
+
+            Message::EditorUndo => {
+                if let Some(p) = &self.project {
+                    if let Some(active) = p.active_file.clone() {
+                        if let Some(s) = self.editor_states.get_mut(&active) {
+                            s.undo();
+                            let t = s.text();
+                            if let Some(pr) = &mut self.project { pr.update_content(&active, t); }
+                        }
+                    }
+                }
+            }
+            Message::EditorRedo => {
+                if let Some(p) = &self.project {
+                    if let Some(active) = p.active_file.clone() {
+                        if let Some(s) = self.editor_states.get_mut(&active) {
+                            s.redo();
+                            let t = s.text();
+                            if let Some(pr) = &mut self.project { pr.update_content(&active, t); }
+                        }
+                    }
+                }
+            }
+            Message::EditorCut => {
+                if let Some(p) = &self.project {
+                    if let Some(active) = p.active_file.clone() {
+                        if let Some(s) = self.editor_states.get_mut(&active) {
+                            // Select current line if nothing selected, then cut
+                            s.content.perform(text_editor::Action::Move(text_editor::Motion::Home));
+                            s.content.perform(text_editor::Action::Select(text_editor::Motion::End));
+                            // iced 0.13 doesn't expose system clipboard in text_editor actions;
+                            // we delete the selection (the OS keyboard shortcut Ctrl+X handles real cut).
+                            s.content.perform(text_editor::Action::Edit(text_editor::Edit::Delete));
+                            let t = s.text(); if let Some(pr) = &mut self.project { pr.update_content(&active, t); }
+                        }
+                    }
+                }
+            }
+            Message::EditorCopy => {
+                // Copy is handled natively by the OS via Ctrl+C on the focused text_editor.
+                // The menu item fires this no-op; the user can use the keyboard shortcut.
+                self.set_status("Use Ctrl+C to copy".into(), StatusKind::Info);
+            }
+            Message::EditorPaste => {
+                // Paste is handled natively by the OS via Ctrl+V on the focused text_editor.
+                self.set_status("Use Ctrl+V to paste".into(), StatusKind::Info);
+            }
+
+            Message::SwitchPdfTab(idx) => {
+                if idx < self.pdf_viewers.len() {
+                    self.active_pdf_idx = idx;
+                }
+            }
+            Message::ClosePdfTab(idx) => {
+                if self.pdf_viewers.len() > 1 {
+                    self.pdf_viewers.remove(idx);
+                    if self.active_pdf_idx >= self.pdf_viewers.len() {
+                        self.active_pdf_idx = self.pdf_viewers.len() - 1;
+                    }
+                }
+            }
 
             Message::Noop => {}
             Message::Error(e) => self.set_status(e, StatusKind::Error),
@@ -844,8 +941,9 @@ impl Ferroleaf {
         let body: Element<Message> = if let Some(active) = &project.active_file {
             if let Some(state) = self.editor_states.get(active) {
                 let lc = state.text().lines().count();
+                let cursor_line = state.cursor_position().0;
                 container(row![
-                    crate::editor::line_gutter(lc, font_size),
+                    crate::editor::line_gutter(lc, font_size, cursor_line),
                     container(
                         text_editor(&state.content)
                             .on_action(Message::EditorAction)
@@ -868,7 +966,56 @@ impl Ferroleaf {
         column![tabs, body].spacing(0).width(Length::Fill).height(Length::Fill).into()
     }
 
-    fn view_pdf(&self) -> Element<Message> { self.pdf_viewer.view() }
+    fn view_pdf(&self) -> Element<Message> { self.view_pdf_tabbed() }
+
+    fn view_pdf_tabbed(&self) -> Element<Message> {
+        //  PDF tab bar 
+        let tabs: Vec<Element<Message>> = self.pdf_viewers.iter().enumerate().map(|(i, v)| {
+            let name = v.pdf_path.as_ref()
+                .and_then(|p| p.file_name())
+                .and_then(|n| n.to_str())
+                .unwrap_or("PDF");
+            let is_active = i == self.active_pdf_idx;
+            let label = button(
+                text(name).size(12u16)
+                    .color(if is_active { Palette::PINK_BRIGHT } else { Palette::TEXT_DIM })
+            )
+            .on_press(Message::SwitchPdfTab(i))
+            .style(if is_active { crate::theme::tab_button(true) } else { crate::theme::tab_button(false) })
+            .padding([5u16, 10u16]);
+
+            let close = button(text("x").size(11u16).color(Palette::TEXT_DIM))
+                .on_press(Message::ClosePdfTab(i))
+                .style(crate::theme::ghost_button)
+                .padding([3u16, 6u16]);
+
+            container(
+                row![label, close].spacing(2).align_y(Alignment::Center)
+            )
+            .style(if is_active { crate::theme::tab_active } else { crate::theme::tab_inactive })
+            .into()
+        }).collect();
+
+        let tab_bar_row: Element<Message> = if self.pdf_viewers.len() > 1 {
+            container(
+                row(tabs).spacing(1).align_y(Alignment::End)
+            )
+            .width(Length::Fill)
+            .height(36)
+            .style(crate::theme::toolbar)
+            .into()
+        } else {
+            Space::with_height(0).into()
+        };
+
+        let viewer = self.active_pdf().view();
+
+        column![tab_bar_row, viewer]
+            .spacing(0)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into()
+    }
 
     //  Menu bar 
 
@@ -924,12 +1071,12 @@ impl Ferroleaf {
                 dmi("Quit",                  Message::Quit),
             ],
             MenuKind::Edit => vec![
-                dmi("Undo         Ctrl+Z",   Message::Noop),
-                dmi("Redo         Ctrl+Y",   Message::Noop),
+                dmi("Undo         Ctrl+Z",   Message::EditorUndo),
+                dmi("Redo         Ctrl+Y",   Message::EditorRedo),
                 dms(),
-                dmi("Cut          Ctrl+X",   Message::Noop),
-                dmi("Copy         Ctrl+C",   Message::Noop),
-                dmi("Paste        Ctrl+V",   Message::Noop),
+                dmi("Cut          Ctrl+X",   Message::EditorCut),
+                dmi("Copy         Ctrl+C",   Message::EditorCopy),
+                dmi("Paste        Ctrl+V",   Message::EditorPaste),
                 dmi("Select All   Ctrl+A",   Message::SelectAll),
                 dms(),
                 dmi("Comment / Uncomment Line", Message::CommentLine),
@@ -992,12 +1139,12 @@ impl Ferroleaf {
     fn view_context_menu_overlay(&self, ctx: &ContextMenuState) -> Element<'_, Message> {
         let items: Vec<Element<Message>> = match ctx.kind {
             ContextMenuKind::Editor => vec![
-                dmi("Undo",                        Message::Noop),
-                dmi("Redo",                        Message::Noop),
+                dmi("Undo",   Message::EditorUndo),
+                dmi("Redo",   Message::EditorRedo),
                 dms(),
-                dmi("Cut",                         Message::Noop),
-                dmi("Copy",                        Message::Noop),
-                dmi("Paste",                       Message::Noop),
+                dmi("Cut",    Message::EditorCut),
+                dmi("Copy",   Message::EditorCopy),
+                dmi("Paste",  Message::EditorPaste),
                 dmi("Select All",                  Message::SelectAll),
                 dms(),
                 dmi("Comment / Uncomment Line",    Message::CommentLine),
@@ -1005,7 +1152,7 @@ impl Ferroleaf {
                 dmi("Compile   Ctrl+B",            Message::Compile),
             ],
             ContextMenuKind::PdfViewer => {
-                let page = self.pdf_viewer.current_page;
+                let page = self.active_pdf().current_page;
                 let (pw, ph) = (ctx.page_w, ctx.page_h);
                 vec![
                     dmi("Jump to Source (SyncTeX)", Message::SynctexAt {
@@ -1216,8 +1363,8 @@ impl Ferroleaf {
 
     /// Re-render all pages at the current zoom.
     fn rerender_pdf(&self) -> Task<Message> {
-        if let Some(path) = &self.pdf_viewer.pdf_path {
-            let path = path.clone(); let zoom = self.pdf_viewer.zoom;
+        if let Some(path) = &self.active_pdf().pdf_path {
+            let path = path.clone(); let zoom = self.active_pdf().zoom;
             Task::perform(
                 async move {
                     crate::pdf_viewer::render_pdf_pages(&path, zoom).await.unwrap_or_default()
@@ -1356,7 +1503,15 @@ fn tog(label: &'static str, on: bool, msg: Message) -> Element<'static, Message>
 
 fn overlay_welcome(base: Element<'_, Message>) -> Element<'_, Message> {
     let card = container(column![
-        text("# Ferroleaf").size(38u16).color(Palette::PINK_BRIGHT),
+        // Title row with close button
+        row![
+            text("# Ferroleaf").size(38u16).color(Palette::PINK_BRIGHT),
+            Space::with_width(Length::Fill),
+            button(text("x").size(16u16).color(Palette::TEXT_DIM))
+                .on_press(Message::CloseWelcome)
+                .style(crate::theme::ghost_button)
+                .padding([4u16, 10u16]),
+        ].align_y(Alignment::Center),
         text("Native LaTeX editor for Linux").size(13u16).color(Palette::TEXT_SECONDARY),
         Space::with_height(24),
         button(text("  Open Project Folder  ").size(14u16))
