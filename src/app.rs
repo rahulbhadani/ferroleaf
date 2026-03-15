@@ -133,9 +133,6 @@ pub struct Ferroleaf {
     dialog_open: bool,
     /// When true, the next PdfPagesRendered will auto-fit zoom and clear this flag.
     pdf_fit_on_next_render: bool,
-    /// Accumulated vertical scroll of the editor pane (pixels from top).
-    /// Updated from WheelScrolled events and used to sync the line-number gutter.
-    editor_scroll_y: f32,
 }
 
 impl Ferroleaf {
@@ -161,7 +158,6 @@ impl Ferroleaf {
             window_width: 1440.0, window_height: 900.0,
             dialog_open: false,
             pdf_fit_on_next_render: false,
-            editor_scroll_y: 0.0,
         };
         // Query the actual window size immediately so zoom-fit works correctly
         // even if the window is rendered at a different size than the default.
@@ -257,11 +253,6 @@ impl Ferroleaf {
             }
             Message::SwitchTab(path) => {
                 if let Some(p) = &mut self.project { p.active_file = Some(path); }
-                self.editor_scroll_y = 0.0;
-                return scrollable::scroll_to(
-                    crate::editor::gutter_scroll_id(),
-                    scrollable::AbsoluteOffset { x: 0.0, y: 0.0 },
-                );
             }
             Message::ToggleFileTreeDir(path) => { self.file_tree.toggle_dir(&path); }
             Message::NewFile => { self.modal = Modal::NewFile { name: String::new() }; }
@@ -331,26 +322,8 @@ impl Ferroleaf {
                     }
                 }
             }
-            Message::EditorWheelScrolled(delta) => {
-                // Only sync gutter when the mouse is inside the editor pane.
-                let (mx, _my) = self.mouse_pos;
-                let sidebar_w  = if self.sidebar_visible { 220.0_f32 } else { 0.0 };
-                let editor_end = sidebar_w
-                    + (self.window_width - sidebar_w) * self.split_ratio;
-                if mx >= sidebar_w && mx <= editor_end {
-                    // Convert the wheel delta to pixels using the same line height
-                    // the gutter uses (font_size * 1.3), with 3 lines per tick.
-                    let line_h = self.font_size as f32 * 1.3;
-                    let dy = match delta {
-                        mouse::ScrollDelta::Lines { y, .. } => -y * 3.0 * line_h,
-                        mouse::ScrollDelta::Pixels { y, .. } => -y,
-                    };
-                    self.editor_scroll_y = (self.editor_scroll_y + dy).max(0.0);
-                    return scrollable::scroll_to(
-                        crate::editor::gutter_scroll_id(),
-                        scrollable::AbsoluteOffset { x: 0.0, y: self.editor_scroll_y },
-                    );
-                }
+            Message::EditorWheelScrolled(_delta) => {
+                // No-op: gutter removed; editor scrollbar is handled natively.
             }
             Message::SaveFile => {
                 if let Some(project) = &mut self.project {
@@ -940,26 +913,33 @@ impl Ferroleaf {
         let font_size = self.font_size;
         let body: Element<Message> = if let Some(active) = &project.active_file {
             if let Some(state) = self.editor_states.get(active) {
-                let lc = state.text().lines().count();
+                let lc          = state.text().lines().count();
                 let cursor_line = state.cursor_position().0;
-                container(row![
-                    crate::editor::line_gutter(lc, font_size, cursor_line),
-                    container(
-                        text_editor(&state.content)
-                            .on_action(Message::EditorAction)
-                            .font(Font::MONOSPACE)
-                            .size(font_size)
-                            .style(crate::theme::code_editor)
-                            .highlight_with::<LatexHighlighter>(
-                                LatexHighlightSettings,
-                                latex_highlight_format,
-                            )
-                            .height(Length::Fill)
-                    ).width(Length::Fill).padding([4u16, 4u16]),
-                ].spacing(0))
-                .width(Length::Fill).height(Length::Fill)
-                .style(crate::theme::editor_pane)
-                .into()
+
+                // ── bottom layer: per-line highlight ───────────────────────
+                let highlight = crate::editor::line_highlight_column(lc, font_size, cursor_line);
+
+                // ── top layer: text editor (transparent bg so highlight shows) ─
+                let editor = container(
+                    text_editor(&state.content)
+                        .on_action(Message::EditorAction)
+                        .font(Font::MONOSPACE)
+                        .size(font_size)
+                        .style(crate::theme::code_editor_transparent)
+                        .highlight_with::<LatexHighlighter>(
+                            LatexHighlightSettings,
+                            latex_highlight_format,
+                        )
+                        .height(Length::Fill)
+                )
+                .width(Length::Fill)
+                .padding([4u16, 4u16]);
+
+                container(stack![highlight, editor])
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .style(crate::theme::editor_pane)
+                    .into()
             } else { blank("Loading...") }
         } else { blank("Select a file to edit") };
 

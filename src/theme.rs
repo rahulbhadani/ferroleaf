@@ -119,34 +119,6 @@ pub fn editor_pane(_t: &Theme) -> container::Style {
     container_bg(Palette::BG_EDITOR)
 }
 
-/// Gutter scrollable: slightly darker than the editor, scrollbar rail invisible.
-/// The scrollbar thumb is also hidden — the gutter is for display only.
-pub fn gutter_scroll(_t: &Theme, _status: scrollable::Status) -> scrollable::Style {
-    // Gutter background is one shade darker than the editor to give a clear
-    // visual separation from the code text area.
-    let bg = Color { r: 0.12, g: 0.08, b: 0.08, a: 1.0 };
-    scrollable::Style {
-        container: container_bg(bg),
-        vertical_rail: scrollable::Rail {
-            background: Some(Background::Color(bg)),
-            border: Border::default(),
-            scroller: scrollable::Scroller {
-                color: Color::TRANSPARENT,
-                border: Border::default(),
-            },
-        },
-        horizontal_rail: scrollable::Rail {
-            background: Some(Background::Color(bg)),
-            border: Border::default(),
-            scroller: scrollable::Scroller {
-                color: Color::TRANSPARENT,
-                border: Border::default(),
-            },
-        },
-        gap: None,
-    }
-}
-
 pub fn pdf_pane(_t: &Theme) -> container::Style {
     container::Style {
         background: Some(Background::Color(Palette::BG_MID)),
@@ -369,6 +341,19 @@ pub fn code_editor(_t: &Theme, _status: text_editor::Status) -> text_editor::Sty
         placeholder: Palette::TEXT_DIM,
         value: Palette::TEXT_CODE,
         selection: Palette::PINK_DIM,
+    }
+}
+
+/// Like `code_editor` but with a fully transparent background so the
+/// line-highlight layer beneath it (in the `stack!`) shows through.
+pub fn code_editor_transparent(_t: &Theme, _status: text_editor::Status) -> text_editor::Style {
+    text_editor::Style {
+        background: Background::Color(Color::TRANSPARENT),
+        border: Border { color: Color::TRANSPARENT, width: 0.0, radius: 0.0.into() },
+        icon:        Palette::TEXT_DIM,
+        placeholder: Palette::TEXT_DIM,
+        value:       Palette::TEXT_CODE,
+        selection:   Palette::PINK_DIM,
     }
 }
 

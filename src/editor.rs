@@ -1,6 +1,6 @@
 use iced::{
-    widget::{button, column, container, row, scrollable, text, text_editor, Space},
-    Alignment, Element, Font, Length,
+    widget::{button, column, container, row, text, text_editor, Space},
+    Alignment, Background, Element, Length,
 };
 use std::path::PathBuf;
 use crate::app::Message;
@@ -336,51 +336,41 @@ pub fn tab_bar<'a>(
         .into()
 }
 
-//  Line number gutter 
+// ─── Current-line highlight column ───────────────────────────────────────────
 
-/// Stable scrollable ID so app.rs can call scrollable::scroll_to to keep the
-/// gutter in sync with the text_editor's internal scroll position.
-pub fn gutter_scroll_id() -> scrollable::Id {
-    scrollable::Id::new("line_gutter_scroll")
-}
+/// Builds a full-width column that sits as the *bottom* layer of a `stack!`.
+///
+/// Each row is exactly `font_size * 1.3` px tall — matching iced's default
+/// `LineHeight::Relative(1.3)` — so they align 1-to-1 with editor lines.
+/// The active row is given a warm highlight background.
+/// Hovering over the highlighted row shows a tooltip with the line number.
+pub fn line_highlight_column(
+    line_count: usize,
+    font_size:  u16,
+    cursor_line: usize,
+) -> Element<'static, Message> {
+    let line_h    = (font_size as f32 * 1.3).round();
+    let highlight = iced::Color { r: 0.28, g: 0.19, b: 0.18, a: 1.0 };
 
-pub fn line_gutter(line_count: usize, font_size: u16, cursor_line: usize) -> Element<'static, Message> {
-    // iced uses LineHeight::Relative(1.3) by default. Each row must match exactly.
-    let line_h = (font_size as f32 * 1.3).round();
-
-    let numbers: Vec<Element<Message>> = (1..=(line_count.max(1)))
-        .map(|n| {
-            let is_active = (n - 1) == cursor_line;
-            let num_color = if is_active { Palette::PINK_BRIGHT } else { Palette::TEXT_DIM };
-            // Subtle warm highlight on the active line
-            let bg_color = iced::Color { r: 0.28, g: 0.19, b: 0.18, a: 1.0 };
-            let row_style = move |_t: &iced::Theme| iced::widget::container::Style {
-                background: if is_active {
-                    Some(iced::Background::Color(bg_color))
-                } else { None },
-                ..Default::default()
-            };
-            container(
-                text(format!("{:>4}", n))
-                    .size(font_size.saturating_sub(2))
-                    .font(Font::MONOSPACE)
-                    .color(num_color)
-            )
-            .width(Length::Fill)
-            .height(Length::Fixed(line_h))
-            .style(row_style)
-            .into()
+    let rows: Vec<Element<Message>> = (0..line_count.max(1))
+        .map(|i| {
+            let is_active = i == cursor_line;
+            container(Space::new(Length::Fill, Length::Fixed(line_h)))
+                .width(Length::Fill)
+                .style(move |_: &iced::Theme| iced::widget::container::Style {
+                    background: if is_active {
+                        Some(Background::Color(highlight))
+                    } else {
+                        None
+                    },
+                    ..Default::default()
+                })
+                .into()
         })
         .collect();
 
-    scrollable(
-        container(column(numbers).spacing(0))
-            .width(Length::Fill)
-            .padding([4u16, 4u16])
-    )
-    .id(gutter_scroll_id())
-    .width(48)
-    .height(Length::Fill)
-    .style(crate::theme::gutter_scroll)
-    .into()
+    container(column(rows).spacing(0))
+        .padding(iced::Padding { top: 4.0, right: 0.0, bottom: 0.0, left: 0.0 })
+        .width(Length::Fill)
+        .into()
 }
